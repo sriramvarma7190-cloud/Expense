@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='5.4 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='5.5 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render()}
@@ -188,7 +188,7 @@ const isImgUrl=v=>/^https?:\/\/.+\.(png|jpe?g|svg|webp|gif|ico)(\?.*)?$/i.test(v
 const logoSources=d=>[`https://www.google.com/s2/favicons?domain=${d}&sz=128`,`https://icons.duckduckgo.com/ip3/${d}.ico`,`https://logo.clearbit.com/${d}`,`https://${d}/apple-touch-icon.png`,`https://${d}/favicon.ico`];
 function logoNext(img){img.parentNode.classList.remove('ok');const rest=(img.dataset.alt||'').split('|').filter(Boolean);if(!rest.length){img.remove();return}img.dataset.alt=rest.slice(1).join('|');img.className=/simpleicons/.test(rest[0])?'plain':'';img.src=rest[0]}
 function logoCheck(img){if(img.naturalWidth&&img.naturalWidth<=16&&/google\.com\/s2/.test(img.src)){logoNext(img);return}img.parentNode.classList.add('ok')}
-const KIND_ICON={gold:['#B8860B','<circle cx="12" cy="12" r="7" fill="#F2C14E" stroke="#B8860B" stroke-width="1.5"/><path d="M9 12.5l2 2 4-4.5" stroke="#8A6508" stroke-width="1.6" fill="none" stroke-linecap="round"/>'],
+const KIND_ICON={gold:['#412402','<rect x="3" y="15" width="12" height="4.2" rx="0.8" fill="#EF9F27"/><rect x="9" y="15" width="12" height="4.2" rx="0.8" fill="#FAC775"/><rect x="6" y="10.4" width="12" height="4.2" rx="0.8" fill="#FAC775"/><rect x="8" y="5.8" width="10" height="4.2" rx="0.8" fill="#FAEEDA"/>'],
 fund:['#1E6B48','<path d="M4 16l5-5 3 3 5-6" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="8" r="1.8" fill="#fff"/>'],
 bond:['#2F4BC9','<rect x="4" y="6" width="16" height="12" rx="2" fill="none" stroke="#fff" stroke-width="1.8"/><path d="M7 12h10" stroke="#fff" stroke-width="1.6"/>'],
 stock:['#7E22CE','<path d="M5 18V9M10 18V5M15 18v-6M20 18v-9" stroke="#fff" stroke-width="2" stroke-linecap="round"/>'],
@@ -315,7 +315,7 @@ v.querySelectorAll('[data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(
 v.querySelector('#addAcct')?.addEventListener('click',()=>openAccount());
 v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)));
 v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.post.split('|');if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name},()=>{r.posted=r.posted||[];r.posted.push(m)})});
-v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('loan:')){toast('Turn the reminder off in the loan settings');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
+v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
 const q=v.querySelector('#q');if(q){q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
 v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
 v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render()});
@@ -687,7 +687,7 @@ document.getElementById('cancel').onclick=()=>edit?openGoalDetail(edit):(sheet=n
 D.recurring=D.recurring||[];
 const dueDate=(r,m)=>{const[y,mo]=m.split('-').map(Number);const last=new Date(y,mo,0).getDate();return `${m}-${String(Math.min(r.day,last)).padStart(2,'0')}`};
 function dueRecurring(){const out=[];const now=mk(today());
-D.accounts.filter(a=>isLoan(a)&&a.showDue!==false&&a.emi>0).forEach(a=>{const m=now;const d=dueDate({day:a.stDay||1},m);const paid=D.txns.some(t=>t.type==='transfer'&&t.toAccountId===a.id&&mk(t.date)===m);
+D.accounts.filter(a=>isLoan(a)&&a.showDue!==false&&a.emi>0).forEach(a=>{const m=now;if((a.skipDue||[]).includes(m))return;const d=dueDate({day:a.emiDay||a.stDay||1},m);const paid=D.txns.some(t=>t.type==='transfer'&&t.toAccountId===a.id&&mk(t.date)===m);
 if(d<=today()&&!paid)out.push({r:{id:'loan:'+a.id,name:a.name+' EMI',type:'transfer',amount:a.emi,accountId:(D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'))||{}).id,toAccountId:a.id,posted:[]},m,date:d,loan:true})});(D.recurring||[]).forEach(r=>{if(r.active===false||!acct(r.accountId))return;let m=r.start||now;let guard=0;while(m<=now&&guard++<120){const d=dueDate(r,m);if(d<=today()&&!(r.posted||[]).includes(m))out.push({r,m,date:d});m=shiftMonth(m,1)}});return out.sort((a,b)=>a.date.localeCompare(b.date))}
 function openRecurring(){const list=D.recurring||[];const tot={};list.filter(r=>r.active!==false&&r.type==='expense').forEach(r=>{const c=cur(acct(r.accountId));tot[c]=(tot[c]||0)+r.amount});
 sheet={title:'Recurring',body(){return`<div class="muted" style="margin-bottom:12px;line-height:1.4">Rent, subscriptions, the monthly transfer home. Each shows up on Home when it's due; tap Add to confirm it (you can change the amount first).</div>
@@ -781,7 +781,7 @@ const L=loanState(a);let bal=L.principalOut,accr=L.accrued,interest=0,months=0,l
 const d=new Date(today()+'T00:00:00');const end=new Date(d);end.setFullYear(end.getFullYear()+60);
 while(bal+accr>0.01&&d<=end){d.setDate(d.getDate()+1);const iso=d.toISOString().slice(0,10);
 const day=d.getDate(),dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
-while(li<lumps.length&&lumps[li].date===iso){let amt=lumps[li].amt;const ti=Math.min(accr,amt);accr-=ti;bal=Math.max(0,bal-(amt-ti));li++}
+while(li<lumps.length&&lumps[li].date<=iso){let amt=lumps[li].amt;const ti=Math.min(accr,amt);accr-=ti;bal=Math.max(0,bal-(amt-ti));li++}
 if(day===Math.min(stDay,dim)){bal+=accr;accr=0}
 if(day===Math.min(emiDay,dim)&&bal+accr>0){let amt=Math.min(emi,bal+accr);const ti=Math.min(accr,amt);accr-=ti;bal=Math.max(0,bal-(amt-ti));months++}
 const di=bal*rate/basis;accr+=di;interest+=di;if(bal<=0.01&&accr<=0.01)break}
