@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='7.6 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='7.7 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1118,13 +1118,18 @@ function flowStats(months){const now=mk(today());const dates=D.txns.map(t=>t.dat
 const first=dates.length?mk(dates[0]):now;
 const ms=[];for(let i=1;i<=months;i++){const m=shiftMonth(now,-i);if(m>=first)ms.push(m)}
 const asked=months;const partial=ms.length<months;
+const d=new Date(today());const dayNow=d.getDate();const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+const useCurrent=ms.length===0;if(useCurrent)ms.push(now);
+const scale=useCurrent?(dim/Math.max(1,dayNow)):1;
 let inc=0,spent=0,emi=0,n=ms.length||1;
 ms.forEach(m=>{['USD','INR'].forEach(c=>{inc+=toBase(earnedIn(m,c),c);spent+=toBase(spentIn(m,c),c)});
 D.txns.forEach(t=>{if(t.type==='transfer'&&isLoan(acct(t.toAccountId))&&mk(t.date)===m)emi+=toBase(t.amount,cur(acct(t.accountId)))})});
-return{months:ms.length,asked,partial,thin:ms.length===0,income:inc/n,spend:spent/n,emi:emi/n,surplus:(inc-spent-emi)/n}}
+return{months:useCurrent?0:ms.length,asked,partial,useCurrent,dayNow,dim,thin:useCurrent&&inc===0&&spent===0,income:inc/n*scale,spend:spent/n*scale,emi:emi/n*scale,surplus:(inc-spent-emi)/n*scale}}
 function flowDetail(months){const now=mk(today());const dates=D.txns.map(t=>t.date).filter(Boolean).sort();const first=dates.length?mk(dates[0]):now;
 const ms=[];for(let i=1;i<=months;i++){const m=shiftMonth(now,-i);if(m>=first)ms.push(m)}
-const n=ms.length||1;const inSrc={USD:{},INR:{}},outCat={USD:{},INR:{}},emis={};let moved=0,movedTo={};
+const d0=new Date(today());const useCur=ms.length===0;if(useCur)ms.push(now);
+const scale=useCur?(new Date(d0.getFullYear(),d0.getMonth()+1,0).getDate()/Math.max(1,d0.getDate())):1;
+const n=(ms.length||1)/scale;const inSrc={USD:{},INR:{}},outCat={USD:{},INR:{}},emis={};let moved=0,movedTo={};
 D.txns.forEach(t=>{const m=mk(t.date);if(!ms.includes(m))return;const fa=acct(t.accountId),c=cur(fa);
 if(t.type==='income'){const k=t.category||'Other';inSrc[c]&&(inSrc[c][k]=(inSrc[c][k]||0)+t.amount)}
 else if(t.type==='expense'){const k=t.category||'Other';outCat[c]&&(outCat[c][k]=(outCat[c][k]||0)+t.amount)}
@@ -1162,7 +1167,9 @@ return{...f,...w,save,hit,debtFree,path,target,fx:fxRate(),includeInvest:inc}}
 const mLabel=n=>n==null?null:mlabel(shiftMonth(mk(today()),n));
 const dur=n=>n==null?'—':(n<12?`${n} mo`:`${Math.floor(n/12)} yr${n%12?' '+(n%12)+' mo':''}`);
 // where to cut
-function cutIdeas(window){const now=mk(today());const last=shiftMonth(now,-1);const ideas=[];
+function cutIdeas(window){const now=mk(today());let last=shiftMonth(now,-1);
+if(!D.txns.some(t=>t.type==='expense'&&mk(t.date)===last))last=now;
+const ideas=[];
 ['INR','USD'].forEach(c=>{const bud=budgetFor(last,c);const act=catSpend(last,c);
 const hist={};const ms=[];for(let i=2;i<=window+1;i++)ms.push(shiftMonth(now,-i));
 ms.forEach(m=>{const o=catSpend(m,c);Object.entries(o).forEach(([k,v])=>hist[k]=(hist[k]||0)+v)});
@@ -1186,8 +1193,8 @@ const alt=project(target,{window:+(st.wWin||6),includeInvest:st.wInv===false,ext
 const ideas=cutIdeas(+(st.wWin||6));
 const withCuts=+(st.wExtra||0);
 return`<div class="kpi" style="grid-template-columns:1fr;margin:0 0 12px"><div class="stat"><span>Target ${f(target)} · reached</span><b class="num" style="font-size:26px;color:${p.hit==null?'var(--out)':'var(--in)'}">${p.hit==null?'not at this pace':mLabel(p.hit)}</b><i>${p.hit==null?'surplus is too small — see the cuts below':dur(p.hit)+' away at '+f(p.save)+'/month'}</i></div></div>
-<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">${p.thin?'No complete months of history yet':`From your last ${p.months} complete month${p.months===1?'':'s'}${p.partial?` — you asked for ${p.asked}, that's all the history there is`:''}`}</div>
-${p.thin?`<div class="note out" style="background:var(--outS);margin:0 0 10px">Nothing measured yet, so the figures below are only what you type into "If I save more each month". Come back after a full month of entries.</div>`:p.months<3?`<div class="note mv" style="background:var(--mvS);margin:0 0 10px">Based on ${p.months} month${p.months===1?'':'s'} — treat the date as rough until you have a few more.</div>`:''}
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">${p.useCurrent?`${mlabel(mk(today()))} so far — day ${p.dayNow} of ${p.dim}, scaled to a full month`:`From your last ${p.months} complete month${p.months===1?'':'s'}${p.partial?` — you asked for ${p.asked}, that's all the history there is`:''}`}</div>
+${p.thin?`<div class="note out" style="background:var(--outS);margin:0 0 10px">Nothing recorded yet this month, so the figures below are only what you type into "If I save more each month".</div>`:p.useCurrent?`<div class="note mv" style="background:var(--mvS);margin:0 0 10px">Only this month so far, scaled up to a full month — treat the date as rough. Once ${mlabel(mk(today())).split(' ')[0]} ends it switches to complete months automatically.</div>`:p.months<3?`<div class="note mv" style="background:var(--mvS);margin:0 0 10px">Based on ${p.months} complete month${p.months===1?'':'s'} — treat the date as rough until you have a few more.</div>`:''}
 ${(()=>{const d=flowDetail(+(st.wWin||6));const open=st.wOpen||'';const fc=(v,c)=>money(v,0,c);
 const row=(key,label,val,cls,inner)=>`<div data-frow="${key}" style="cursor:pointer"><div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span>${label} <span class="muted" style="font-size:11px">${open===key?'▾':'›'}</span></span><span class="num ${cls}">${val<0?'−':'+'}${f(Math.abs(val))}</span></div></div>${open===key?`<div style="border-left:2px solid var(--line);margin:2px 0 8px 4px;padding-left:12px">${inner||'<div class="muted" style="font-size:12px;padding:4px 0">Nothing in this period.</div>'}</div>`:''}`;
 const sideList=(obj,c)=>{const e=Object.entries(obj).filter(([,v])=>v>0.5).sort((a,b)=>b[1]-a[1]).slice(0,5);
@@ -1216,7 +1223,7 @@ return rows?`<div style="border-top:1px solid var(--line);margin-top:8px;padding
 ${+(st.wExtra||0)>0?`<div class="note mv" style="background:var(--mvS);margin:10px 0 0">Target moves to <b>${p.hit==null?'—':mLabel(p.hit)}</b>${(()=>{const base=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:0});return base.hit!=null&&p.hit!=null?` — ${dur(base.hit-p.hit)} sooner`:''})()}.</div>`:''}</div>
 ${(()=>{const cc=cardCheck();if(!cc.length)return'';
 return`<div class="note out" style="background:var(--outS);margin-bottom:12px">${cc.map(x=>`${esc(x.a.name)}: payments exceed recorded charges by ${money(x.gap,0,cur(x.a))}`).join('; ')}. Card spending is probably missing, so your real spending is higher than shown — record card purchases as expenses on the card.</div>`})()}
-<div class="sec" style="margin-top:4px">Where you could cut<span class="r">last month</span></div>
+<div class="sec" style="margin-top:4px">Where you could cut<span class="r">${D.txns.some(t=>t.type==='expense'&&mk(t.date)===shiftMonth(mk(today()),-1))?'last month':'this month'}</span></div>
 ${ideas.length?`<div class="card">${ideas.map((i,n)=>`<div class="brow"><div class="l"><span>${esc(i.cat)} <span class="muted" style="font-size:11px">${i.c}</span></span><span class="num"><b>${money(i.actual,0,i.c)}</b></span></div>
 <div class="muted num" style="font-size:11px;margin-top:4px">${i.overBudget>1?`${money(i.overBudget,0,i.c)} over your expected ${money(i.budget,0,i.c)}`:''}${i.overBudget>1&&i.overAvg>1?' · ':''}${i.overAvg>1?`${i.pctAvg>0?'+'+i.pctAvg+'%':''} vs your ${money(i.avg,0,i.c)} average`:''}</div>
 <div class="muted num" style="font-size:11px;margin-top:2px">Trimming ${money(i.save,0,i.c)}/month → ${(()=>{const e=+(st.wExtra||0)+toINR(i.save,i.c);const q=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:e});return p.hit!=null&&q.hit!=null?`${dur(p.hit-q.hit)} sooner`:'helps'})()}</div>
