@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='7.0 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='7.1 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1080,11 +1080,16 @@ ${FBuser?`<label class="field"><div>Passphrase <span class="muted">(encrypts bef
 <button class="btn d" id="resetCfg" style="margin-top:10px">Remove cloud setup</button>
 <div class="muted" style="font-size:11px;margin-top:10px">Copy everything / Paste &amp; restore still works as an offline fallback.</div>`},
 wire(){const $=id=>document.getElementById(id);
-$('cfgOk')&&($('cfgOk').onclick=()=>{try{const raw=$('cfgIn').value.trim().replace(/^const\s+firebaseConfig\s*=\s*/,'').replace(/;\s*$/,'');
-const o=JSON.parse(raw.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":').replace(/'/g,'"'));
+$('cfgOk')&&($('cfgOk').onclick=()=>{try{let raw=$('cfgIn').value;
+raw=raw.replace(/\/\*[\s\S]*?\*\//g,'').split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+const ak=raw.indexOf('apiKey');if(ak<0)throw new Error('No apiKey found');const i=raw.lastIndexOf('{',ak);if(i<0)throw new Error('No { } block found');
+let depth=0,end=-1;for(let k=i;k<raw.length;k++){if(raw[k]==='{')depth++;else if(raw[k]==='}'){depth--;if(!depth){end=k;break}}}
+if(end<0)throw new Error('Unclosed { } block');
+let body=raw.slice(i,end+1).replace(/,\s*}/g,'}').replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":').replace(/'/g,'"');
+const o=JSON.parse(body);
 if(!o.apiKey||!o.projectId)throw new Error('Missing apiKey or projectId');
 localStorage.setItem(CFG_KEY,JSON.stringify(o));toast('Setup saved');openCloud()}
-catch(e){$('cfgMsg').textContent="Couldn't read that config — paste the whole { … } block. "+(e.message||'')}});
+catch(e){$('cfgMsg').textContent="Couldn't read that config ("+(e.message||'')+"). Paste the whole snippet from Firebase — comments and extra lines are fine."}});
 $('pw')&&($('pw').oninput=e=>{pass=e.target.value||null});
 $('inBtn')&&($('inBtn').onclick=async()=>{try{await fbSignIn();renderSheet();toast('Signed in')}catch(e){toast('Sign-in failed: '+(e.message||''))}});
 $('outBtn')&&($('outBtn').onclick=async()=>{try{await fbSignOut();renderSheet()}catch(e){toast('Error: '+(e.message||''))}});
