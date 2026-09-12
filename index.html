@@ -146,10 +146,10 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='6.2 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='7.0 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
-function save(){localStorage.setItem(KEY,JSON.stringify(D));render()}
+function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
 D.settings=D.settings||{};
 const ACCENTS=[['#2F4BC9','Indigo'],['#0F766E','Teal'],['#7E22CE','Plum'],['#C2410C','Ember'],['#166534','Forest'],['#B91C1C','Cherry'],['#334155','Slate']];
 function applyTheme(){const t=D.settings.theme||'auto';const dark=t==='dark'||(t==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=dark?'dark':'light';document.body.dataset.theme=dark?'dark':'light';document.documentElement.style.setProperty('--accent',D.settings.accent||'#2F4BC9');document.querySelector('meta[name=theme-color]').content=dark?'#0E1319':'#EEF1F3'}
@@ -1009,12 +1009,102 @@ $('editP').onclick=()=>openAccount(a);
 document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
+// ---------- cloud sync (Firebase + passphrase) ----------
+const CFG_KEY='ledger-fb';const SYNC_KEY='ledger-sync';
+const cfgGet=()=>{try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null')}catch{return null}};
+const syncMeta=()=>{try{return JSON.parse(localStorage.getItem(SYNC_KEY)||'{}')}catch{return{}}};
+const syncSet=o=>localStorage.setItem(SYNC_KEY,JSON.stringify({...syncMeta(),...o}));
+let FB=null,FBuser=null,pass=null,syncBusy=false;
+async function fbInit(){const cfg=cfgGet();if(!cfg)throw new Error('Cloud sync is not set up yet');if(FB)return FB;
+const [app,auth,fs]=await Promise.all([
+import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')]);
+const a=app.initializeApp(cfg);FB={app:a,auth:auth.getAuth(a),db:fs.getFirestore(a),A:auth,F:fs};
+FB.auth.onAuthStateChanged(u=>{FBuser=u;if(sheet&&sheet.cloud)renderSheet()});
+try{const r=await auth.getRedirectResult(FB.auth);if(r&&r.user)FBuser=r.user}catch(e){}
+return FB}
+async function fbSignIn(){const{A,auth}=await fbInit();const p=new A.GoogleAuthProvider();
+try{const r=await A.signInWithPopup(auth,p);FBuser=r.user}
+catch(e){if(/popup|blocked|closed/i.test(e.message||'')){await A.signInWithRedirect(auth,p);return}throw e}
+return FBuser}
+async function fbSignOut(){const{A,auth}=await fbInit();await A.signOut(auth);FBuser=null;pass=null}
+const enc=new TextEncoder(),dec=new TextDecoder();
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function keyFrom(passphrase,salt){const km=await crypto.subtle.importKey('raw',enc.encode(passphrase),'PBKDF2',false,['deriveKey']);
+return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function encryptBlob(text,passphrase){const salt=crypto.getRandomValues(new Uint8Array(16));const iv=crypto.getRandomValues(new Uint8Array(12));
+const k=await keyFrom(passphrase,salt);const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},k,enc.encode(text));
+return{enc:true,salt:b64(salt),iv:b64(iv),data:b64(ct)}}
+async function decryptBlob(o,passphrase){const k=await keyFrom(passphrase,unb64(o.salt));
+const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},k,unb64(o.data));return dec.decode(pt)}
+async function cloudPush(silent){const cfg=cfgGet();if(!cfg||!FBuser)return;if(syncBusy)return;syncBusy=true;
+try{const{db,F}=await fbInit();const text=backupText();const payload=pass?await encryptBlob(text,pass):{enc:false,data:text};
+await F.setDoc(F.doc(db,'ledgers',FBuser.uid),{...payload,updatedAt:Date.now(),version:VERSION});
+syncSet({at:Date.now(),uid:FBuser.uid});if(!silent)toast('Backed up to your Google account')}
+catch(e){if(!silent)toast('Sync failed: '+(e.message||'unknown'))}
+finally{syncBusy=false;if(sheet&&sheet.cloud)renderSheet()}}
+async function cloudPull(){const{db,F}=await fbInit();if(!FBuser)throw new Error('Sign in first');
+const snap=await F.getDoc(F.doc(db,'ledgers',FBuser.uid));if(!snap.exists())throw new Error('Nothing saved in the cloud yet');
+const o=snap.data();let text;
+if(o.enc){if(!pass)throw new Error('Enter your passphrase first');text=await decryptBlob(o,pass)}else text=o.data;
+const parsed=JSON.parse(text);if(parsed.app!=='ledger')throw new Error("That doesn't look like a Ledger backup");
+return{parsed,updatedAt:o.updatedAt}}
+let pushTimer=null;
+function cloudQueue(){if(!cfgGet()||!FBuser)return;clearTimeout(pushTimer);pushTimer=setTimeout(()=>cloudPush(true),4000)}
+function openCloud(){const cfg=cfgGet();
+sheet={cloud:true,title:'Cloud sync',body(){const m=syncMeta();
+if(!cfg)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Sign in with Google to keep a copy of your ledger in the cloud and restore it on any device. It needs a free Firebase project of your own — about fifteen minutes, once.</div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;line-height:1.5">1 · console.firebase.google.com → add project<br>2 · Build › Authentication → enable <b>Google</b><br>3 · Authentication › Settings › Authorised domains → add <b>${esc(location.hostname)}</b><br>4 · Build › Firestore Database → create (production mode)<br>5 · Rules tab → paste the rule below → Publish<br>6 · Project settings › Your apps › Web → copy the config</div>
+<pre style="font:11px/1.5 ui-monospace,Menlo,monospace;background:var(--bg);padding:10px;border-radius:8px;margin:10px 0 0;white-space:pre-wrap">rules_version = '2';
+service cloud.firestore {
+ match /databases/{db}/documents {
+  match /ledgers/{uid} {
+   allow read, write: if request.auth != null
+    && request.auth.uid == uid;
+  }
+ }
+}</pre></div>
+<label class="field"><div>Paste the firebaseConfig from step 6</div><textarea id="cfgIn" placeholder='{ "apiKey": "…", "authDomain": "…", "projectId": "…", "appId": "…" }' style="width:100%;height:120px;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;padding:10px"></textarea></label>
+<div id="cfgMsg" class="muted" style="margin-bottom:10px;min-height:16px"></div>
+<button class="btn p" id="cfgOk">Save setup</button>`;
+return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Signed in</span><b>${FBuser?esc(FBuser.email||'yes'):'no'}</b></div>
+<div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Last backup</span><span class="muted">${m.at?dlabel(new Date(m.at).toISOString().slice(0,10))+' '+new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'never'}</span></div>
+<div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Encryption</span><span class="muted">${pass?'passphrase set':'not unlocked'}</span></div></div>
+${FBuser?`<label class="field"><div>Passphrase <span class="muted">(encrypts before it leaves this phone)</span></div><input id="pw" type="password" value="${pass?'':''}" placeholder="${pass?'••••••••':'Choose or enter yours'}"></label>
+<div class="muted" style="font-size:11px;margin:-6px 0 12px">Use the same passphrase on every device. Lose it and the cloud copy can't be opened — your device copy is unaffected.</div>
+<div class="tools" style="margin:0 0 10px"><button class="btn p" id="pushBtn" style="width:auto">Back up now</button><button class="btn" id="pullBtn" style="width:auto">Restore from cloud</button></div>
+<button class="btn" id="outBtn">Sign out</button>`
+:`<button class="btn p" id="inBtn">Sign in with Google</button>`}
+<button class="btn d" id="resetCfg" style="margin-top:10px">Remove cloud setup</button>
+<div class="muted" style="font-size:11px;margin-top:10px">Copy everything / Paste &amp; restore still works as an offline fallback.</div>`},
+wire(){const $=id=>document.getElementById(id);
+$('cfgOk')&&($('cfgOk').onclick=()=>{try{const raw=$('cfgIn').value.trim().replace(/^const\s+firebaseConfig\s*=\s*/,'').replace(/;\s*$/,'');
+const o=JSON.parse(raw.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":').replace(/'/g,'"'));
+if(!o.apiKey||!o.projectId)throw new Error('Missing apiKey or projectId');
+localStorage.setItem(CFG_KEY,JSON.stringify(o));toast('Setup saved');openCloud()}
+catch(e){$('cfgMsg').textContent="Couldn't read that config — paste the whole { … } block. "+(e.message||'')}});
+$('pw')&&($('pw').oninput=e=>{pass=e.target.value||null});
+$('inBtn')&&($('inBtn').onclick=async()=>{try{await fbSignIn();renderSheet();toast('Signed in')}catch(e){toast('Sign-in failed: '+(e.message||''))}});
+$('outBtn')&&($('outBtn').onclick=async()=>{try{await fbSignOut();renderSheet()}catch(e){toast('Error: '+(e.message||''))}});
+$('pushBtn')&&($('pushBtn').onclick=async()=>{if(!pass&&!confirm('No passphrase set — the backup will be stored unencrypted. Continue?'))return;await cloudPush()});
+$('pullBtn')&&($('pullBtn').onclick=async()=>{try{const{parsed,updatedAt}=await cloudPull();
+const mine=syncMeta().at||0;const newer=updatedAt>mine;
+if(!confirm(`Replace everything on this device with the cloud copy?\n\nCloud saved ${new Date(updatedAt).toLocaleString()}${newer?'':' — older than your last backup here'}.\n${parsed.accounts.length} accounts, ${parsed.txns.length} transactions.`))return;
+D={accounts:parsed.accounts,txns:parsed.txns,budgets:parsed.budgets||{},cats:parsed.cats||{},goals:parsed.goals||[],groups:parsed.groups||[],recurring:parsed.recurring||[],settings:{...(parsed.settings||{}),pinHash:D.settings.pinHash}};
+migrateCats();applyTheme();syncSet({at:updatedAt});sheet=null;save();toast('Restored from cloud')}
+catch(e){toast(e.message||'Restore failed')}});
+$('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup from this device? Your data stays here.'))return;localStorage.removeItem(CFG_KEY);localStorage.removeItem(SYNC_KEY);FB=null;FBuser=null;pass=null;openCloud()});
+}};renderSheet();
+if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
+
 // ---------- menu / appearance / pin ----------
 function openMenu(){
-const items=[['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['backup','Backup & move','Copy, paste, or save everything']];
+const items=[['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud sync',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
 sheet={title:'Menu',body(){return`<div class="card menu">${items.map(([k,t,d])=>`<div class="row" data-mi="${k}"><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div><span class="muted">›</span></div>`).join('')}</div><div class="muted" style="text-align:center;margin-top:14px;font-size:12px">Ledger v${VERSION}</div>`},
 wire(){document.querySelectorAll('[data-mi]').forEach(el=>el.onclick=()=>{const k=el.dataset.mi;sheet=null;
-if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='backup')openBackup()})}};renderSheet()}
+if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
 function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.theme||'auto';return`<div class="field"><div>Theme</div><div class="seg" style="margin:0">${[['auto','Match phone'],['light','Light'],['dark','Dark']].map(([v,l])=>`<button data-th="${v}" class="${t===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="field"><div>Accent color</div><div class="sw">${ACCENTS.map(([c,n])=>`<button data-ac="${c}" title="${n}" class="${(D.settings.accent||'#2F4BC9')===c?'on':''}" style="background:${c}"></button>`).join('')}</div></div>
 <div class="muted" style="margin-bottom:16px">Used for transfers, the + button, links and charts.</div>
