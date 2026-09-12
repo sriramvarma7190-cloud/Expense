@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='7.2 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='7.3 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -338,7 +338,11 @@ ${!list.length?`<div class="empty">${D.txns.length?'Nothing matches these filter
 ${groups.map(g=>`<div class="sec">${mlabel(g.k)}<span class="r num">${tot(g.out,'out','−')}${Object.keys(g.out).length&&Object.keys(g.inn).length?'&nbsp;&nbsp;':''}${tot(g.inn,'in','+')}</span></div><div class="card">${g.items.map(t=>txnRow(t,1)).join('')}</div>`).join('')}`}
 
 function goalsPage(){const c=ensureCur();const list=D.goals.filter(g=>g.currency===c);
-return`<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Goals</div><button class="link" id="addGoal">Create goal</button></div>${curToggle()}
+const wt=+(D.settings.wTarget||0);const wp=wt?project(wt,{window:+(D.settings.wWin||6),includeInvest:D.settings.wInv!==false,extra:+(D.settings.wExtra||0)}):null;
+return`<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Goals</div><button class="link" id="addGoal">Create goal</button></div>
+<div class="card" style="margin-top:14px"><div class="brow" id="wealthCard" style="cursor:pointer"><div class="l"><span><b>${wt?'Wealth target':'Set a wealth target'}</b> <span class="muted" style="font-size:11px">›</span></span><span class="num">${wt?`<b>${wp.hit==null?'—':mLabel(wp.hit)}</b>`:'<span class="muted" style="font-size:13px">when will I get there?</span>'}</span></div>
+${wt?`<div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,'INR')} of ${money(wt,0,'INR')} · surplus ${money(wp.save,0,'INR')}/month${wp.debtFree!=null?' · debt-free '+mLabel(wp.debtFree):''}</div>`:'<div class="muted" style="font-size:11px;margin-top:4px">Uses your real income and spending to work out the date.</div>'}</div></div>
+${curToggle()}
 ${list.length?`<div class="card" style="margin-top:14px">${list.map(g=>goalCard(g)).join('')}</div>`:`<div class="empty">No ${c} goals yet.<br><span class="muted" style="font-size:13px">A goal counts money you move into the accounts you pick — a savings account or someone holding money for you.</span></div>`}
 ${D.goals.length&&!list.length?`<div class="muted" style="text-align:center">You have ${D.goals.length} goal${D.goals.length>1?'s':''} in another currency.</div>`:''}
 <p class="help">Tap a goal for the month-by-month view, to skip a month, or to edit it.</p>`}
@@ -351,6 +355,7 @@ v.querySelector('#staleBk')?.addEventListener('click',()=>{if(pass&&FBuser)cloud
 v.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>{R.open[b.dataset.grp]=!R.open[b.dataset.grp];render()});
 v.querySelectorAll('[data-tab-go]').forEach(b=>b.onclick=()=>{tab=b.dataset.tabGo;render();window.scrollTo(0,0)});
 v.querySelector('#addGoal')?.addEventListener('click',()=>openGoalEdit());
+v.querySelector('#wealthCard')?.addEventListener('click',openWealth);
 document.querySelectorAll('nav [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
 if(tab==='reports')wireReports(v);
 v.querySelectorAll('[data-acct]').forEach(el=>el.onclick=()=>{const a=acct(el.dataset.acct);isInvest(a)?openInvestDetail(a):isLoan(a)?openLoanDetail(a):isPerson(a)?openPerson(a):openAccount(a)});
@@ -1013,6 +1018,104 @@ $('editP').onclick=()=>openAccount(a);
 document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
+// ---------- wealth projection ----------
+const fxRate=()=>{const t=[...D.txns].filter(x=>x.type==='transfer'&&x.toAmount>0&&cur(acct(x.accountId))==='USD'&&cur(acct(x.toAccountId))==='INR').sort((a,b)=>b.date.localeCompare(a.date))[0];
+return +(D.settings.fx||(t?(t.toAmount/t.amount):88)).toFixed(2)};
+const toINR=(v,c)=>c==='INR'?v:v*fxRate();
+// liquid = cash/checking/savings/held ; deposits = fd/rd/bond/ppf ; growth = gold/fund/stock/land
+function wealthNow(includeInvest){const b=balances();let liquid=0,dep=0,inv=0,debt=0;
+D.accounts.forEach(a=>{const c=cur(a);
+if(isLoan(a))debt+=toINR(-b[a.id],c);
+else if(a.type==='credit')debt+=toINR(-b[a.id],c);
+else if(isInvest(a)){const v=investValue(a)??holdings(a).net;if(isDep(a))dep+=toINR(v,c);else inv+=toINR(v,c)}
+else liquid+=toINR(b[a.id],c)});
+return{liquid,dep,inv,debt,net:liquid+dep+(includeInvest?inv:0)-debt}}
+function flowStats(months){const now=mk(today());const ms=[];for(let i=1;i<=months;i++)ms.push(shiftMonth(now,-i));
+let inc=0,spent=0,emi=0,n=ms.length||1;
+ms.forEach(m=>{['USD','INR'].forEach(c=>{inc+=toINR(earnedIn(m,c),c);spent+=toINR(spentIn(m,c),c)});
+D.txns.forEach(t=>{if(t.type==='transfer'&&isLoan(acct(t.toAccountId))&&mk(t.date)===m)emi+=toINR(t.amount,cur(acct(t.accountId)))})});
+return{months:n,income:inc/n,spend:spent/n,emi:emi/n,surplus:(inc-spent-emi)/n}}
+function project(target,opt){opt=opt||{};const inc=opt.includeInvest!==false;const extra=+(opt.extra||0);
+const f=flowStats(opt.window||6);const w=wealthNow(inc);
+let liquid=w.liquid+w.dep+(inc?w.inv:0);
+const loans=D.accounts.filter(isLoan).map(a=>({a,bal:loanState(a).out,rate:(a.rate||0)/100,emi:a.emi||0,c:cur(a)}));
+let cards=D.accounts.filter(x=>x.type==='credit').reduce((s,x)=>s+toINR(-balances()[x.id],cur(x)),0);
+const save=f.surplus+extra;let m=0,debtFree=null,hit=null;const path=[];
+for(m=0;m<=600;m++){const debt=loans.reduce((s,l)=>s+toINR(Math.max(0,l.bal),l.c),0)+cards;
+const net=liquid-debt;
+if(m%12===0||m<2)path.push({m,liquid,debt,net});
+if(hit===null&&net>=target)hit=m;
+if(debtFree===null&&debt<=0.01)debtFree=m;
+if(hit!==null&&debtFree!==null)break;
+// advance one month
+let freed=0;
+loans.forEach(l=>{if(l.bal<=0){freed+=toINR(l.emi,l.c);return}
+const int=l.bal*l.rate/12;l.bal=Math.max(0,l.bal+int-l.emi);if(l.bal<=0)freed+=0});
+if(cards>0)cards=Math.max(0,cards-Math.min(cards,save>0?save*0.5:0));
+liquid+=save+freed;
+if(save<=0&&freed<=0&&hit===null&&m>360)break}
+return{...f,...w,save,hit,debtFree,path,target,fx:fxRate(),includeInvest:inc}}
+const mLabel=n=>n==null?null:mlabel(shiftMonth(mk(today()),n));
+const dur=n=>n==null?'—':(n<12?`${n} mo`:`${Math.floor(n/12)} yr${n%12?' '+(n%12)+' mo':''}`);
+// where to cut
+function cutIdeas(window){const now=mk(today());const last=shiftMonth(now,-1);const ideas=[];
+['INR','USD'].forEach(c=>{const bud=budgetFor(last,c);const act=catSpend(last,c);
+const hist={};const ms=[];for(let i=2;i<=window+1;i++)ms.push(shiftMonth(now,-i));
+ms.forEach(m=>{const o=catSpend(m,c);Object.entries(o).forEach(([k,v])=>hist[k]=(hist[k]||0)+v)});
+Object.keys(hist).forEach(k=>hist[k]/=ms.length||1);
+[...new Set([...Object.keys(act),...Object.keys(bud)])].forEach(k=>{const a=act[k]||0,e=+(bud[k]||0),h=hist[k]||0;
+const overBudget=e>0?a-e:0;const overAvg=h>0?a-h:0;
+if(overBudget>1||overAvg>1){ideas.push({cat:k,c,actual:a,budget:e,avg:h,overBudget,overAvg,
+save:Math.max(overBudget,overAvg),pctAvg:h>0?Math.round((a-h)/h*100):null})}})});
+return ideas.sort((x,y)=>toINR(y.save,y.c)-toINR(x.save,x.c)).slice(0,8)}
+
+// ---------- wealth goal UI ----------
+function openWealth(){const st=D.settings;
+sheet={title:'Wealth target',body(){const target=+(st.wTarget||0);
+if(!target)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Name an amount and the app works out the date, using what you actually earn and spend — not estimates. Everything is converted to rupees at the rate below.</div>
+<label class="field"><div>Target net worth (₹)</div><input id="wt" class="num" inputmode="decimal" placeholder="5000000"></label>
+<button class="btn p" id="wtOk">Set target</button>`;
+const p=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:+(st.wExtra||0)});
+const f=x=>money(x,0,'INR');
+const alt=project(target,{window:+(st.wWin||6),includeInvest:st.wInv===false,extra:+(st.wExtra||0)});
+const ideas=cutIdeas(+(st.wWin||6));
+const withCuts=+(st.wExtra||0);
+return`<div class="kpi" style="grid-template-columns:1fr;margin:0 0 12px"><div class="stat"><span>Target ${f(target)} · reached</span><b class="num" style="font-size:26px;color:${p.hit==null?'var(--out)':'var(--in)'}">${p.hit==null?'not at this pace':mLabel(p.hit)}</b><i>${p.hit==null?'surplus is too small — see the cuts below':dur(p.hit)+' away at '+f(p.save)+'/month'}</i></div></div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">From your last ${p.months} months</div>
+${[['Money in',p.income,'in'],['Actually spent',-p.spend,'out'],['Loan EMIs',-p.emi,'out']].map(([l,v,cl])=>`<div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span>${l}</span><span class="num ${cl}">${v<0?'−':'+'}${f(Math.abs(v))}</span></div>`).join('')}
+<div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:8px 0 0;border-top:1px solid var(--line);margin-top:4px"><span><b>Real surplus</b></span><b class="num">${f(p.save)}/month</b></div>
+<div class="seg" style="grid-template-columns:1fr 1fr;margin:12px 0 0">${[[3,'3-month average'],[6,'6-month average']].map(([v,l])=>`<button data-win="${v}" class="${+(st.wWin||6)===v?'on':''}" style="font-size:12px">${l}</button>`).join('')}</div></div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">Net worth now</div>
+${[['Cash & savings',p.liquid],['Deposits (FD/RD/bonds)',p.dep],['Gold, funds, land',p.inv],['Loans & cards',-p.debt]].filter(([,v])=>Math.abs(v)>0.5).map(([l,v])=>`<div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span>${l}</span><span class="num ${v<0?'out':''}">${v<0?'−':''}${f(Math.abs(v))}</span></div>`).join('')}
+<div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:8px 0 0;border-top:1px solid var(--line);margin-top:4px"><span><b>Net worth</b></span><b class="num" style="color:${p.net>=0?'var(--in)':'var(--out)'}">${f(p.net)}</b></div>
+<div class="track" style="margin-top:8px"><i style="width:${pct(Math.max(0,p.net),target)}%;background:var(--accent)"></i></div>
+<div class="seg" style="grid-template-columns:1fr 1fr;margin:12px 0 0">${[[true,'Everything'],[false,'Cash & deposits only']].map(([v,l])=>`<button data-inv="${v}" class="${(st.wInv!==false)===v?'on':''}" style="font-size:12px">${l}</button>`).join('')}</div>
+<div class="muted" style="font-size:11px;margin-top:6px">Other way: ${alt.hit==null?'not reached at this pace':mLabel(alt.hit)}. Gold uses your saved rate; land uses the rate you set.</div></div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Debt-free</span><b>${p.debtFree==null?'—':mLabel(p.debtFree)}</b></div>
+<div class="muted" style="font-size:11px;margin-top:4px">${D.accounts.filter(isLoan).length?`Loan interest costs about ${f(D.accounts.filter(isLoan).reduce((s,a)=>s+toINR(loanState(a).daily*365,cur(a)),0))} a year at today's balance.`:'No loans recorded.'}</div></div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:6px">If I save more each month (₹)</div>
+<input id="wx" class="num" inputmode="decimal" value="${st.wExtra||''}" placeholder="10000">
+${+(st.wExtra||0)>0?`<div class="note mv" style="background:var(--mvS);margin:10px 0 0">Target moves to <b>${p.hit==null?'—':mLabel(p.hit)}</b>${(()=>{const base=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:0});return base.hit!=null&&p.hit!=null?` — ${dur(base.hit-p.hit)} sooner`:''})()}.</div>`:''}</div>
+<div class="sec" style="margin-top:4px">Where you could cut<span class="r">last month</span></div>
+${ideas.length?`<div class="card">${ideas.map((i,n)=>`<div class="brow"><div class="l"><span>${esc(i.cat)} <span class="muted" style="font-size:11px">${i.c}</span></span><span class="num"><b>${money(i.actual,0,i.c)}</b></span></div>
+<div class="muted num" style="font-size:11px;margin-top:4px">${i.overBudget>1?`${money(i.overBudget,0,i.c)} over your expected ${money(i.budget,0,i.c)}`:''}${i.overBudget>1&&i.overAvg>1?' · ':''}${i.overAvg>1?`${i.pctAvg>0?'+'+i.pctAvg+'%':''} vs your ${money(i.avg,0,i.c)} average`:''}</div>
+<div class="muted num" style="font-size:11px;margin-top:2px">Trimming ${money(i.save,0,i.c)}/month → ${(()=>{const e=+(st.wExtra||0)+toINR(i.save,i.c);const q=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:e});return p.hit!=null&&q.hit!=null?`${dur(p.hit-q.hit)} sooner`:'helps'})()}</div>
+<div class="tools" style="margin-top:8px"><button class="btn" data-cut="${toINR(i.save,i.c).toFixed(2)}" style="width:auto;font-size:12px;padding:7px 12px">Add to my extra</button></div></div>`).join('')}</div>`
+:'<div class="empty" style="padding:18px 0;font-size:13px">Nothing is over budget or above your average last month.</div>'}
+<div class="card" style="padding:12px 14px;margin-top:12px"><label class="field" style="margin:0"><div>Exchange rate used (₹ per $)</div><input id="wfx" class="num" inputmode="decimal" value="${p.fx}"></label><div class="muted" style="font-size:11px;margin-top:6px">Taken from your latest India transfer. Edit it if you prefer a different rate.</div></div>
+<div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="width:auto">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
+wire(){const $=id=>document.getElementById(id);
+$('wtOk')&&($('wtOk').onclick=()=>{const v=parseFloat($('wt').value.replace(/[^0-9.]/g,''))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();openWealth()});
+$('wt')&&($('wt').oninput=e=>e.target.value=e.target.value.replace(/[^0-9.]/g,''));
+document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dataset.win;save();openWealth()});
+document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{st.wInv=b.dataset.inv==='true';save();openWealth()});
+$('wx')&&($('wx').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'')},$('wx').onchange=e=>{st.wExtra=parseFloat(e.target.value)||0;save();openWealth()});
+document.querySelectorAll('[data-cut]').forEach(b=>b.onclick=()=>{st.wExtra=Math.round(((+st.wExtra||0)+ +b.dataset.cut)*100)/100;save();openWealth();toast('Added '+money(+b.dataset.cut,0,'INR')+' to your extra')});
+$('wfx')&&($('wfx').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){st.fx=v;save();openWealth()}});
+$('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;save();openWealth()});
+$('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wExtra;save();sheet=null;render()});
+document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
+
 // ---------- cloud sync (Firebase + passphrase) ----------
 const CFG_KEY='ledger-fb';const SYNC_KEY='ledger-sync';const PW_KEY='ledger-pw';
 const cfgGet=()=>{try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null')}catch{return null}};
@@ -1112,10 +1215,10 @@ if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
 
 // ---------- menu / appearance / pin ----------
 function openMenu(){
-const items=[['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud sync',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
+const items=[['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud sync',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
 sheet={title:'Menu',body(){return`<div class="card menu">${items.map(([k,t,d])=>`<div class="row" data-mi="${k}"><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div><span class="muted">›</span></div>`).join('')}</div><div class="muted" style="text-align:center;margin-top:14px;font-size:12px">Ledger v${VERSION}</div>`},
 wire(){document.querySelectorAll('[data-mi]').forEach(el=>el.onclick=()=>{const k=el.dataset.mi;sheet=null;
-if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
+if(k==='wealth')openWealth();else if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
 function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.theme||'auto';return`<div class="field"><div>Theme</div><div class="seg" style="margin:0">${[['auto','Match phone'],['light','Light'],['dark','Dark']].map(([v,l])=>`<button data-th="${v}" class="${t===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="field"><div>Accent color</div><div class="sw">${ACCENTS.map(([c,n])=>`<button data-ac="${c}" title="${n}" class="${(D.settings.accent||'#2F4BC9')===c?'on':''}" style="background:${c}"></button>`).join('')}</div></div>
 <div class="muted" style="margin-bottom:16px">Used for transfers, the + button, links and charts.</div>
