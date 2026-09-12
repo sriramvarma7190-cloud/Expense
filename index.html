@@ -168,7 +168,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.4 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.5 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -336,6 +336,23 @@ const tot=ppl.reduce((x,y)=>x+y.v,0);
 return`<div class="sec">Owed to you<span class="r"><button class="link" id="mgGroups" style="font-size:12px">Groups</button></span></div><div class="card">
 <div class="brow" style="background:var(--bg)"><div class="l"><span><b>${tot>=0?'Owed to you':'You owe'}</b></span><span class="num"><b style="color:${tot>=0?'var(--in)':'var(--out)'}">${money(Math.abs(tot),0,c)}</b></span></div><div class="muted" style="font-size:11px;margin-top:4px">across ${ppl.length||peopleIn(c).length} ${(ppl.length||peopleIn(c).length)===1?'person':'people'}</div></div>
 ${ppl.length?ppl.map(({a,v})=>`<div class="row" data-person="${a.id}">${logoEl(a,32)}<div class="main"><div class="t">${esc(pname(a))}</div><div class="s">${v>=0?'owes you':'you owe'}</div></div><div class="amt num" style="color:${v>=0?'var(--in)':'var(--out)'}">${money(Math.abs(v),0,c)}</div></div>`).join(''):'<div class="empty" style="padding:16px 0;font-size:13px">Everyone is settled up.</div>'}</div>`})()}
+${(()=>{const last=reviewDue();if(!last)return'';const c2=ensureCur();
+const sp=spentIn(last,c2),prev=spentIn(shiftMonth(last,-1),c2),kept=remainingIn(last,c2);
+const delta=prev>0?Math.round((sp-prev)/prev*100):null;
+const oo=D.txns.filter(t=>t.type==='expense'&&mk(t.date)===last&&inCur(t,c2)).sort((a,b)=>b.amount-a.amount)[0];
+const m2=syncMeta();const bkDays=m2.at?Math.floor((Date.now()-m2.at)/864e5):null;
+const card=D.accounts.filter(a=>isCard(a)&&promoOn(a)&&cardState(a).total>0).sort((a,b)=>cardState(a).promoDays-cardState(b).promoDays)[0];
+return`<div class="card" style="margin-bottom:10px;padding:14px"><div class="l" style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:15px;font-weight:600">${mlabel(last).split(' ')[0]} in review</span><button class="link" id="revClose" style="font-size:12px">Dismiss</button></div>
+<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px solid var(--line);margin-top:8px"><span>Spent</span><span class="num">${money(sp,0,c2)}${delta!=null?` <span class="muted" style="font-size:11px">${delta>0?'+':''}${delta}% vs ${mlabel(shiftMonth(last,-1)).split(' ')[0]}</span>`:''}</span></div>
+<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px solid var(--line)"><span>Kept</span><span class="num" style="color:${kept>=0?'var(--in)':'var(--out)'}">${money(kept,0,c2)}</span></div>
+${oo?`<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px solid var(--line)"><span>Biggest</span><span class="num">${esc(oo.category||'Other')} ${money(oo.amount,0,c2)}</span></div>`:''}
+${cfgGet()?`<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px solid var(--line)"><span>Backup</span><span style="color:${bkDays!=null&&bkDays<3?'var(--in)':'var(--out)'}">${bkDays==null?'never':bkDays<1?'up to date':bkDays+' days ago'}</span></div>`:''}
+${card?`<div class="muted" style="font-size:12px;margin-top:10px"><b>One thing to act on:</b> ${esc(card.name)} 0% ends in ${cardState(card).promoDays} days — ${money(cardState(card).total/Math.max(1,cardState(card).promoDays/30),0,cur(card))}/mo clears it.</div>`:''}
+<div class="tools" style="margin-top:10px"><button class="btn" id="revOpen" style="width:auto;font-size:12px;padding:8px 12px">See the month</button></div></div>`})()}
+${(()=>{const g=dupGroups();if(!g.length)return'';const first=g[0];const t0=first.txns[0];const c3=cur(acct(t0.accountId));
+return`<div class="card" style="margin-bottom:10px;padding:12px 14px;border-color:var(--outBd)"><div style="font-size:13px;margin-bottom:6px">${g.length===1?'2 entries look identical':g.length+' possible duplicates'}</div>
+${first.txns.slice(0,2).map(t=>`<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>${esc(t.note||t.category||'Expense')} · ${dlabel(t.date)}</span><span class="num">${money(t.amount,0,c3)}</span></div>`).join('')}
+<div class="tools" style="margin-top:8px"><button class="btn" data-dupdel="${esc(first.txns[1].id)}" style="width:auto;font-size:12px;padding:7px 12px">Delete one</button><button class="btn" data-dupok="${esc(first.k)}" style="width:auto;font-size:12px;padding:7px 12px">Both are real</button></div></div>`})()}
 ${(()=>{if(!cfgGet())return'';const m=syncMeta();const days=m.at?Math.floor((Date.now()-m.at)/864e5):999;
 if(days<3)return'';
 return`<div class="card" style="margin-bottom:10px;padding:12px 14px;background:var(--outS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="flex:1"><div style="font-weight:500;font-size:14px;color:var(--out)">${m.at?`Last backed up ${days} days ago`:'Not backed up yet'}</div><div class="muted" style="font-size:12px;margin-top:2px">${pass?'Tap to back up now.':'Enter your passphrase to resume backups.'}</div></div><button class="btn" id="staleBk" style="width:auto;padding:9px 14px;font-size:13px">${pass?'Back up':'Open'}</button></div></div>`})()}
@@ -344,14 +361,31 @@ ${transit.length?`<div class="sec">In transit<span class="r">not yet credited</s
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
 
 let F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};
+let BACK=null;let SEL=null;
+function goBack(){if(!BACK)return;const b=BACK;BACK=null;tab=b.tab;R.cur=b.cur;R.month=b.month||R.month;R.catOpen=b.catOpen;R.chartMode=b.chartMode;F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};render();setTimeout(()=>window.scrollTo(0,b.y||0),0)}
+const markBack=()=>{BACK={tab,cur:R.cur,month:R.month,catOpen:R.catOpen,chartMode:R.chartMode,y:window.scrollY||0}};
+function fKey(){return JSON.stringify({q:F.q.trim(),acct:F.acct,type:F.type,cat:F.cat,month:F.month,year:F.year,oneOff:F.oneOff,all:F.all})}
+function fLabel(f){const p2=[];if(f.q)p2.push('"'+f.q+'"');if(f.cat)p2.push(f.cat);if(f.type!=='all')p2.push(f.type);if(f.acct!=='all')p2.push(acct(f.acct)?.name||'');if(f.month)p2.push(mlabel(f.month).split(' ')[0]);if(f.year)p2.push(f.year);if(f.oneOff)p2.push('one-offs');if(f.all)p2.push('all currencies');return p2.filter(Boolean).join(' · ')||'Everything'}
+function rememberSearch(){const k=fKey();const f=JSON.parse(k);if(!f.q&&!f.cat&&f.type==='all'&&f.acct==='all'&&!f.month&&!f.year&&!f.oneOff)return;
+D.recent=(D.recent||[]).filter(x=>JSON.stringify(x)!==k);D.recent.unshift(f);D.recent=D.recent.slice(0,4);localStorage.setItem(KEY,JSON.stringify(D))}
+function applyFilter(f){F={q:f.q||'',acct:f.acct||'all',type:f.type||'all',cat:f.cat||null,month:f.month||null,cur:null,year:f.year||null,oneOff:!!f.oneOff,all:!!f.all};render()}
 function activity(){const c=ensureCur();const s=F.q.trim().toLowerCase();
 const list=[...D.txns].filter(t=>F.acct==='all'||t.accountId===F.acct||t.toAccountId===F.acct).filter(t=>F.type==='all'||t.type===F.type).filter(t=>!F.cat||(t.category||'Other')===F.cat).filter(t=>!F.month||mk(t.date)===F.month).filter(t=>!F.year||t.date.startsWith(F.year)).filter(t=>!F.oneOff||isOneOff(t)).filter(t=>F.all||cur(acct(t.accountId))===c||(t.type==='transfer'&&cur(acct(t.toAccountId))===c)).filter(t=>!s||(t.note||'').toLowerCase().includes(s)||(t.category||'').toLowerCase().includes(s)||(acct(t.accountId)?.name||'').toLowerCase().includes(s)).sort((x,y)=>y.date.localeCompare(x.date)||y.created-x.created);
 const groups=[];list.forEach(t=>{const k=mk(t.date);let g=groups.find(x=>x.k===k);if(!g){g={k,items:[],out:{},inn:{}};groups.push(g)}g.items.push(t);const c=cur(acct(t.accountId));if(t.type==='expense')g.out[c]=(g.out[c]||0)+t.amount;if(t.type==='income')g.inn[c]=(g.inn[c]||0)+t.amount});
 const tot=(o,cls,sg)=>Object.entries(o).map(([c,v])=>`<span class="${cls}">${sg}${money(v,0,c)}</span>`).join('&nbsp;&nbsp;');
-return`<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Activity</div></div>
+return`${SEL?`<div class="card" style="padding:10px 14px;margin-bottom:10px;background:var(--mvS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--mv)">${SEL.length} selected${(()=>{const by={};SEL.map(id=>D.txns.find(t=>t.id===id)).filter(Boolean).forEach(t=>{const cc=cur(acct(t.accountId));by[cc]=(by[cc]||0)+t.amount});const parts=Object.entries(by).map(([cc,v])=>money(v,0,cc));return parts.length?' · '+parts.join(' · '):''})()}</span><button class="link" id="selCancel" style="font-size:12px">Cancel</button></div>
+<div class="tools" style="margin-top:8px">${SEL.length?`<button class="btn" id="selCat" style="width:auto;font-size:12px;padding:7px 12px">Change category</button><button class="btn" id="selOne" style="width:auto;font-size:12px;padding:7px 12px">Mark one-off</button><button class="btn d" id="selDel" style="width:auto;font-size:12px;padding:7px 12px;margin:0">Delete</button>`:'<span class="muted" style="font-size:12px">Tap rows to select them.</span>'}</div></div>`:''}
+${BACK&&!SEL?`<button class="link" id="backBtn" style="font-size:13px;padding:0 0 6px">‹ Back to ${BACK.tab==='reports'?'reports':BACK.tab==='home'?'home':BACK.tab}</button>`:''}
+<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Activity</div></div>
 ${F.all?'':curToggle()}<input id="q" value="${esc(F.q)}" placeholder="Search notes, categories, accounts" style="margin-top:10px;font-size:14px;padding:9px 12px">
+${(()=>{const rec=(D.recent||[]),sav=(D.saved||[]);if(!rec.length&&!sav.length)return'';
+return`<div style="margin-top:8px">${sav.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Saved</div><div class="chips" style="margin-bottom:8px">${sav.map((f,i)=>`<button type="button" data-sf="${i}" style="background:var(--mvS);border-color:var(--mvBd);color:var(--mv)">${esc(fLabel(f))}</button>`).join('')}</div>`:''}
+${rec.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Recent</div><div class="chips" style="margin-bottom:4px">${rec.map((f,i)=>`<button type="button" data-rf="${i}">${esc(fLabel(f))}</button>`).join('')}</div>`:''}</div>`})()}
 <div class="filters"><select id="fa"><option value="all">All accounts</option>${D.accounts.filter(a=>cur(a)===c).map(a=>`<option value="${a.id}"${F.acct===a.id?' selected':''}>${esc(a.name)}</option>`).join('')}</select><select id="ft">${[['all','All types'],['expense','Expenses'],['income','Income'],['transfer','Transfers']].map(([v,l])=>`<option value="${v}"${F.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
-${F.cat||F.month||F.year||F.oneOff?`<div class="tools"><button class="btn" id="clearF" style="background:var(--mvS);color:var(--mv)">${F.all?(F.cat?esc(F.cat)+' · all currencies':'All currencies'):F.oneOff?'One-offs':F.month?mlabel(F.month):F.year?F.year:'All time'}${F.cat?' · '+esc(F.cat):''} &nbsp;×</button></div>`:''}
+${F.all?rateLine('Amounts')+'':''}
+${F.cat||F.month||F.year||F.oneOff||F.all?`<div class="tools"><button class="btn" id="clearF" style="background:var(--mvS);color:var(--mv)">${F.all?(F.cat?esc(F.cat)+' · all currencies':'All currencies'):F.oneOff?'One-offs':F.month?mlabel(F.month):F.year?F.year:'All time'}${F.cat?' · '+esc(F.cat):''} &nbsp;×</button></div>`:''}
+${(()=>{const k=fKey();const f=JSON.parse(k);const on=(D.saved||[]).some(x=>JSON.stringify(x)===k);const any=f.q||f.cat||f.type!=='all'||f.acct!=='all'||f.month||f.year||f.oneOff;
+return any?`<div class="tools" style="margin-top:8px"><button class="btn" id="saveF" style="width:auto;font-size:12px;padding:7px 12px;${on?'background:var(--mvS);color:var(--mv)':''}">${on?'✓ Saved search':'Save this search'}</button></div>`:''})()}
 <div class="tools"><button class="btn" id="exp">Export CSV</button><button class="btn" id="imp">Import CSV</button><input type="file" id="impFile" accept=".csv,text/csv" hidden></div>
 ${(()=>{const active=s||F.cat||F.acct!=='all'||F.type!=='all'||F.month||F.year||F.all;if(!active||!list.length)return'';
 const byC={};const add=(o,c,v)=>{o[c]=(o[c]||0)+v};
@@ -384,6 +418,10 @@ v.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{R.cur=b.dataset.rc;loc
 if(R.cur==='ALL'&&tab!=='reports'){R.cur=currencies()[0]||'USD';localStorage.setItem('ledger-cur',R.cur);v.innerHTML=tab==='home'?home():tab==='activity'?activity():goalsPage()}
 v.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>openPerson(acct(b.dataset.person)));
 v.querySelector('#mgGroups')?.addEventListener('click',()=>openGroups(ensureCur()));
+v.querySelector('#revClose')?.addEventListener('click',()=>{D.settings.reviewSeen=[...(D.settings.reviewSeen||[]),reviewDue()].filter(Boolean);save()});
+v.querySelector('#revOpen')?.addEventListener('click',()=>{const last=reviewDue();markBack();R.month=last;tab='reports';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-dupdel]').forEach(b=>b.onclick=()=>{D.txns=D.txns.filter(t=>t.id!==b.dataset.dupdel);save();toast('Duplicate removed')});
+v.querySelectorAll('[data-dupok]').forEach(b=>b.onclick=()=>{D.settings.dupOk=[...(D.settings.dupOk||[]),b.dataset.dupok];save();toast('Kept both')});
 v.querySelector('#staleBk')?.addEventListener('click',()=>{if(pass&&FBuser)cloudPush();else openCloud()});
 v.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>{R.open[b.dataset.grp]=!R.open[b.dataset.grp];render()});
 v.querySelectorAll('[data-tab-go]').forEach(b=>b.onclick=()=>{tab=b.dataset.tabGo;render();window.scrollTo(0,0)});
@@ -392,16 +430,34 @@ v.querySelector('#wealthCard')?.addEventListener('click',openWealth);
 document.querySelectorAll('nav [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
 if(tab==='reports')wireReports(v);
 v.querySelectorAll('[data-acct]').forEach(el=>el.onclick=()=>{const a=acct(el.dataset.acct);isInvest(a)?openInvestDetail(a):isLoan(a)?openLoanDetail(a):isCard(a)?openCardDetail(a):isPerson(a)?openPerson(a):openAccount(a)});
-v.querySelectorAll('[data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
+v.querySelectorAll('[data-txn]').forEach(el=>{const id=el.dataset.txn;
+if(SEL){if(SEL.includes(id))el.style.background='var(--mvS)';el.onclick=()=>{const i=SEL.indexOf(id);if(i>=0)SEL.splice(i,1);else SEL.push(id);render()};return}
+el.onclick=()=>openTxn(D.txns.find(t=>t.id===id));
+let timer=null;const start=()=>{timer=setTimeout(()=>{SEL=[id];render()},500)};const stop=()=>clearTimeout(timer);
+el.addEventListener('touchstart',start,{passive:true});el.addEventListener('touchend',stop);el.addEventListener('touchmove',stop);
+el.addEventListener('mousedown',start);el.addEventListener('mouseup',stop);el.addEventListener('mouseleave',stop)});
+v.querySelector('#selCancel')?.addEventListener('click',()=>{SEL=null;render()});
+v.querySelector('#selDel')?.addEventListener('click',()=>{if(!confirm(`Delete ${SEL.length} transaction${SEL.length===1?'':'s'}? This cannot be undone.`))return;D.txns=D.txns.filter(t=>!SEL.includes(t.id));SEL=null;save();toast('Deleted')});
+v.querySelector('#selOne')?.addEventListener('click',()=>{D.txns.forEach(t=>{if(SEL.includes(t.id))t.oneOff=true});SEL=null;save();toast('Marked as one-off')});
+v.querySelector('#selCat')?.addEventListener('click',()=>{const cc=cur(acct(D.txns.find(t=>t.id===SEL[0])?.accountId))||baseCur();
+sheet={title:'Change category',body(){return`<div class="muted" style="margin-bottom:10px">${SEL.length} transaction${SEL.length===1?'':'s'} → pick a category</div><div class="chips">${catsOf('expense',cc).map(k=>`<button type="button" data-bc="${esc(k)}">${esc(k)}</button>`).join('')}</div>`},
+wire(){document.querySelectorAll('[data-bc]').forEach(b=>b.onclick=()=>{D.txns.forEach(t=>{if(SEL.includes(t.id))t.category=b.dataset.bc});SEL=null;sheet=null;save();toast('Category updated')})}};renderSheet()});
 v.querySelector('#addAcct')?.addEventListener('click',()=>openAccount());
 v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)));
 v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.post.split('|');if(id.startsWith('card:')||id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));const r2=dueRecurring().find(x=>x.r.id===id);if(!r2)return;openTxn(null,{type:'transfer',amount:r2.r.amount,date:r2.date,accountId:r2.r.accountId,toAccountId:r2.r.toAccountId,note:r2.r.name});return}
 if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name,split:!!r.who,who:r.who||[]},()=>{r.posted=r.posted||[];r.posted.push(m)})});
 v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('card:')||id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast('Hidden for '+mlabel(m).split(' ')[0]);return}
 if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
-const q=v.querySelector('#q');if(q){q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
+const q=v.querySelector('#q');if(q){q.onchange=()=>rememberSearch();q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
 v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
-v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render()});
+v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;rememberSearch();render()});
+v.querySelector('#backBtn')?.addEventListener('click',goBack);
+v.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>applyFilter((D.recent||[])[+b.dataset.rf]));
+v.querySelectorAll('[data-sf]').forEach(b=>b.onclick=()=>applyFilter((D.saved||[])[+b.dataset.sf]));
+v.querySelector('#saveF')?.addEventListener('click',()=>{const k=fKey();const cur2=(D.saved||[]);const had=cur2.some(x=>JSON.stringify(x)===k);
+D.saved=cur2.filter(x=>JSON.stringify(x)!==k);
+if(!had){D.saved.unshift(JSON.parse(k));D.saved=D.saved.slice(0,6)}
+save();toast(had?'Removed from saved':'Search saved')});
 v.querySelector('#clearF')?.addEventListener('click',()=>{F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};render()});
 v.querySelector('#exp')?.addEventListener('click',exportCSV);
 v.querySelector('#imp')?.addEventListener('click',()=>document.getElementById('impFile').click());
@@ -746,14 +802,14 @@ ${years.length>1?`<div class="sec">All years</div><div class="card"><table class
 function wireReports(v){v.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=>{R.month=shiftMonth(R.month,+b.dataset.mo);render()});
 v.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{R.month=b.dataset.jump;render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{R.month=b.dataset.year+R.month.slice(4);render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelector('#chartMode')?.addEventListener('click',()=>{R.chartMode=(R.chartMode||'flow')==='flow'?'cat':'flow';render()});
 v.querySelector('#chartSpan')?.addEventListener('click',()=>{R.chartAll=!R.chartAll;render()});
 v.querySelectorAll('[data-catrange]').forEach(b=>b.onclick=()=>{R.catRange=b.dataset.catrange;render()});
 v.querySelectorAll('[data-catrow]').forEach(b=>b.onclick=()=>{R.catOpen=R.catOpen===b.dataset.catrow?null:b.dataset.catrow;render()});
-v.querySelectorAll('[data-catjump]').forEach(b=>b.onclick=e=>{e.stopPropagation();F={q:'',acct:'all',type:'expense',cat:b.dataset.catname,month:b.dataset.catjump,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-catjump]').forEach(b=>b.onclick=e=>{e.stopPropagation();markBack();F={q:'',acct:'all',type:'expense',cat:b.dataset.catname,month:b.dataset.catjump,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
 v.querySelector('#pickMonth')?.addEventListener('click',openMonthPicker);
 v.querySelector('#setBud')?.addEventListener('click',openBudget);v.querySelector('#openGoals')?.addEventListener('click',openGoals);v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)))}
 
@@ -1490,7 +1546,7 @@ $('rateOpen')&&($('rateOpen').onclick=openRateSheet);
 $('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;save();openWealth()});
 $('manageRec')&&($('manageRec').onclick=()=>openRecurring());
 $('cardMode')&&($('cardMode').onclick=openCardModes);
-$('ooReview')&&($('ooReview').onclick=()=>{const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)).sort((a,b)=>b.date.localeCompare(a.date));
+$('ooReview')&&($('ooReview').onclick=()=>{markBack();const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)).sort((a,b)=>b.date.localeCompare(a.date));
 if(oo.length){const c=cur(acct(oo[0].accountId));R.cur=c;localStorage.setItem('ledger-cur',c)}
 F={q:'',acct:'all',type:'expense',cat:null,month:null,cur:null,year:null,oneOff:true};sheet=null;tab='activity';render();window.scrollTo(0,0)});
 $('ooHelp')&&($('ooHelp').onclick=()=>toast('Open a transaction and tick "One-off", or mark a whole category in Menu › Categories'));
@@ -1506,6 +1562,14 @@ $('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;save();openWealth()});
 $('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wExtra;delete st.wCuts;save();sheet=null;render()});
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
+// ---------- duplicates ----------
+function dupGroups(){const ok=new Set(D.settings.dupOk||[]);const by={};
+D.txns.forEach(t=>{if(t.type==='transfer')return;const k=[t.type,t.accountId,t.date,t.amount.toFixed(2)].join('|');(by[k]=by[k]||[]).push(t)});
+return Object.entries(by).filter(([k,v])=>v.length>1&&!ok.has(k)).map(([k,v])=>({k,txns:v}))}
+// ---------- month in review ----------
+function reviewDue(){const d=new Date(today());if(d.getDate()>5)return null;
+const last=shiftMonth(mk(today()),-1);if((D.settings.reviewSeen||[]).includes(last))return null;
+if(!D.txns.some(t=>mk(t.date)===last))return null;return last}
 // ---------- daily rate refresh ----------
 const daysSince=d=>d?Math.floor((new Date(today())-new Date(d))/864e5):999;
 const fxStale=()=>daysSince(D.settings.fxLiveAt);
