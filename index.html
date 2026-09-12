@@ -150,7 +150,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='8.4 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.0 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1432,7 +1432,9 @@ document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderShee
 
 // ---------- cloud sync (Firebase + passphrase) ----------
 const CFG_KEY='ledger-fb';const SYNC_KEY='ledger-sync';const PW_KEY='ledger-pw';
-const cfgGet=()=>{try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null')}catch{return null}};
+const BUILTIN_FB=null; // paste your firebaseConfig object here to let anyone sign up without setup
+const cfgGet=()=>{if(BUILTIN_FB&&BUILTIN_FB.apiKey)return BUILTIN_FB;try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null')}catch{return null}};
+const cfgIsBuiltIn=()=>!!(BUILTIN_FB&&BUILTIN_FB.apiKey);
 const syncMeta=()=>{try{return JSON.parse(localStorage.getItem(SYNC_KEY)||'{}')}catch{return{}}};
 const syncSet=o=>localStorage.setItem(SYNC_KEY,JSON.stringify({...syncMeta(),...o}));
 let FB=null,FBuser=null,pass=(localStorage.getItem(PW_KEY)||null),syncBusy=false;
@@ -1449,6 +1451,12 @@ async function fbSignIn(){const{A,auth}=await fbInit();const p=new A.GoogleAuthP
 try{const r=await A.signInWithPopup(auth,p);FBuser=r.user}
 catch(e){if(/popup|blocked|closed/i.test(e.message||'')){await A.signInWithRedirect(auth,p);return}throw e}
 return FBuser}
+async function fbEmail(mode,email,pw){const{A,auth}=await fbInit();
+const fn=mode==='up'?A.createUserWithEmailAndPassword:A.signInWithEmailAndPassword;
+const r=await fn(auth,email,pw);FBuser=r.user;return FBuser}
+async function fbReset(email){const{A,auth}=await fbInit();await A.sendPasswordResetEmail(auth,email)}
+async function fbDeleteAccount(){const{A,auth,db,F}=await fbInit();if(!FBuser)throw new Error('Not signed in');
+await F.deleteDoc(F.doc(db,'ledgers',FBuser.uid));await A.deleteUser(FBuser);FBuser=null;pass=null;localStorage.removeItem(PW_KEY);localStorage.removeItem(SYNC_KEY)}
 async function fbSignOut(){const{A,auth}=await fbInit();await A.signOut(auth);FBuser=null;pass=null;localStorage.removeItem(PW_KEY)}
 const enc=new TextEncoder(),dec=new TextDecoder();
 const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
@@ -1474,10 +1482,10 @@ const parsed=JSON.parse(text);if(parsed.app!=='ledger')throw new Error("That doe
 return{parsed,updatedAt:o.updatedAt}}
 let pushTimer=null;
 function cloudQueue(){if(!cfgGet()||!FBuser)return;clearTimeout(pushTimer);pushTimer=setTimeout(()=>cloudPush(true),4000)}
-function openCloud(){const cfg=cfgGet();
-sheet={cloud:true,title:'Cloud sync',body(){const m=syncMeta();
-if(!cfg)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Sign in with Google to keep a copy of your ledger in the cloud and restore it on any device. It needs a free Firebase project of your own — about fifteen minutes, once.</div>
-<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;line-height:1.5">1 · console.firebase.google.com → add project<br>2 · Build › Authentication → enable <b>Google</b><br>3 · Authentication › Settings › Authorised domains → add <b>${esc(location.hostname)}</b><br>4 · Build › Firestore Database → create (production mode)<br>5 · Rules tab → paste the rule below → Publish<br>6 · Project settings › Your apps › Web → copy the config</div>
+function openCloud(){const cfg=cfgGet();let mode='in',email='',pw='',msg='';
+sheet={cloud:true,title:'Cloud backup',body(){const m=syncMeta();
+if(!cfg)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">This copy of the app has no cloud project attached. Either keep using it offline — your data stays on this device and Menu › Backup saves a file — or attach your own free Firebase project below.</div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;line-height:1.5">1 · console.firebase.google.com → add project<br>2 · Build › Authentication → enable <b>Google</b> and <b>Email/Password</b><br>3 · Authentication › Settings › Authorised domains → add <b>${esc(location.hostname)}</b><br>4 · Build › Firestore Database → create (production mode)<br>5 · Rules tab → paste the rule below → Publish<br>6 · Project settings › Your apps › Web → copy the config</div>
 <pre style="font:11px/1.5 ui-monospace,Menlo,monospace;background:var(--bg);padding:10px;border-radius:8px;margin:10px 0 0;white-space:pre-wrap">rules_version = '2';
 service cloud.firestore {
  match /databases/{db}/documents {
@@ -1487,19 +1495,29 @@ service cloud.firestore {
   }
  }
 }</pre></div>
-<label class="field"><div>Paste the firebaseConfig from step 6</div><textarea id="cfgIn" placeholder='{ "apiKey": "…", "authDomain": "…", "projectId": "…", "appId": "…" }' style="width:100%;height:120px;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;padding:10px"></textarea></label>
+<label class="field"><div>Paste the firebaseConfig from step 6</div><textarea id="cfgIn" placeholder='{ "apiKey": "…", "authDomain": "…", "projectId": "…", "appId": "…" }' style="width:100%;height:110px;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;padding:10px"></textarea></label>
 <div id="cfgMsg" class="muted" style="margin-bottom:10px;min-height:16px"></div>
 <button class="btn p" id="cfgOk">Save setup</button>`;
-return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Signed in</span><b>${FBuser?esc(FBuser.email||'yes'):'no'}</b></div>
+if(!FBuser)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Sign in to keep an encrypted copy of your ledger in the cloud and restore it on any device. Your ledger stays on this phone either way.</div>
+<button class="btn p" id="inBtn" style="margin-bottom:12px">Continue with Google</button>
+<div class="muted" style="text-align:center;font-size:12px;margin-bottom:10px">or use an email address</div>
+<div class="seg" style="grid-template-columns:1fr 1fr">${[['in','I have an account'],['up','Create account']].map(([k,l])=>`<button data-am2="${k}" class="${mode===k?'on':''}" style="font-size:12px">${l}</button>`).join('')}</div>
+<label class="field"><div>Email</div><input id="emIn" type="email" value="${esc(email)}" placeholder="you@example.com" autocomplete="email"></label>
+<label class="field"><div>Password</div><input id="pwIn" type="password" value="${esc(pw)}" placeholder="${mode==='up'?'At least 6 characters':'Your password'}" autocomplete="${mode==='up'?'new-password':'current-password'}"></label>
+${msg?`<div class="note ${/sent|created/i.test(msg)?'in':'out'}">${esc(msg)}</div>`:''}
+<button class="btn p" id="emOk">${mode==='up'?'Create account':'Sign in'}</button>
+${mode==='in'?'<button class="btn" id="fgOk" style="margin-top:10px">Forgot password</button>':''}
+<div class="muted" style="font-size:11px;margin-top:12px;line-height:1.45">${cfgIsBuiltIn()?'Your backup is stored in the app owner\'s Firebase project. Only your account can read it, but the owner controls the project — use a passphrase below if you would rather it be unreadable to anyone but you.':'Stored in your own Firebase project.'} You can delete your account and its backup at any time.</div>`;
+return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Signed in</span><b>${esc(FBuser.email||'yes')}</b></div>
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Last backup</span><span class="muted">${m.at?dlabel(new Date(m.at).toISOString().slice(0,10))+' '+new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'never'}</span></div>
-<div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Encryption</span><span class="muted">${pass?'passphrase set':'not unlocked'}</span></div></div>
-${FBuser?`<label class="field"><div>Passphrase <span class="muted">(encrypts before it leaves this phone)</span></div><input id="pw" type="password" value="${pass?'':''}" placeholder="${pass?'••••••••':'Choose or enter yours'}"></label>
+<div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Encryption</span><span class="muted">${pass?'passphrase set':'none — readable by the project owner'}</span></div></div>
+<label class="field"><div>Passphrase <span class="muted">(optional — encrypts before it leaves this phone)</span></div><input id="pw" type="password" placeholder="${pass?'••••••••':'Leave blank for no encryption'}"></label>
 <label class="field" style="display:flex;align-items:center;gap:8px;margin:-6px 0 6px"><input type="checkbox" id="pwRem" style="width:auto"${localStorage.getItem(PW_KEY)?' checked':''}><span style="font-size:14px">Remember it on this phone</span></label>
-<div class="muted" style="font-size:11px;margin:0 0 12px">${localStorage.getItem(PW_KEY)?'Backups run on their own — no typing. Anyone who unlocks this phone and digs into app storage could read it, so keep your PIN lock on.':"You'll type it once each time you open the app. Turn this on and backups run on their own."} Use the same passphrase on every device; lose it and the cloud copy can't be opened.</div>
+<div class="muted" style="font-size:11px;margin:0 0 12px">${pass?'Nobody but you can open the backup — including the project owner. Lose the passphrase and the cloud copy is unrecoverable; your device copy is unaffected.':'Without a passphrase the backup is stored as plain text that the project owner could read.'}</div>
 <div class="tools" style="margin:0 0 10px"><button class="btn p" id="pushBtn" style="width:auto">Back up now</button><button class="btn" id="pullBtn" style="width:auto">Restore from cloud</button></div>
-<button class="btn" id="outBtn">Sign out</button>`
-:`<button class="btn p" id="inBtn">Sign in with Google</button>`}
-<button class="btn d" id="resetCfg" style="margin-top:10px">Remove cloud setup</button>
+<button class="btn" id="outBtn">Sign out</button>
+<button class="btn d" id="delAcc" style="margin-top:10px">Delete my account and backup</button>
+${!cfgIsBuiltIn()?'<button class="btn d" id="resetCfg" style="margin-top:10px">Remove cloud setup</button>':''}
 <div class="muted" style="font-size:11px;margin-top:10px">Copy everything / Paste &amp; restore still works as an offline fallback.</div>`},
 wire(){const $=id=>document.getElementById(id);
 $('cfgOk')&&($('cfgOk').onclick=()=>{try{let raw=$('cfgIn').value;
@@ -1508,28 +1526,38 @@ const ak=raw.indexOf('apiKey');if(ak<0)throw new Error('No apiKey found');const 
 let depth=0,end=-1;for(let k=i;k<raw.length;k++){if(raw[k]==='{')depth++;else if(raw[k]==='}'){depth--;if(!depth){end=k;break}}}
 if(end<0)throw new Error('Unclosed { } block');
 let body=raw.slice(i,end+1).replace(/,\s*}/g,'}').replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":').replace(/'/g,'"');
-const o=JSON.parse(body);
-if(!o.apiKey||!o.projectId)throw new Error('Missing apiKey or projectId');
+const o=JSON.parse(body);if(!o.apiKey||!o.projectId)throw new Error('Missing apiKey or projectId');
 localStorage.setItem(CFG_KEY,JSON.stringify(o));toast('Setup saved');openCloud()}
 catch(e){$('cfgMsg').textContent="Couldn't read that config ("+(e.message||'')+"). Paste the whole snippet from Firebase — comments and extra lines are fine."}});
+document.querySelectorAll('[data-am2]').forEach(b=>b.onclick=()=>{mode=b.dataset.am2;msg='';email=$('emIn')?$('emIn').value:email;renderSheet()});
+$('emIn')&&($('emIn').oninput=e=>email=e.target.value);$('pwIn')&&($('pwIn').oninput=e=>pw=e.target.value);
+$('emOk')&&($('emOk').onclick=async()=>{email=$('emIn').value.trim();pw=$('pwIn').value;
+if(!email||!pw)  {msg='Enter an email and password.';return renderSheet()}
+if(mode==='up'&&pw.length<6){msg='Use at least 6 characters.';return renderSheet()}
+try{await fbEmail(mode,email,pw);msg='';renderSheet();toast(mode==='up'?'Account created':'Signed in')}
+catch(e){msg=(e.code||'').includes('email-already-in-use')?'That email already has an account — switch to "I have an account".':(e.code||'').includes('wrong-password')||(e.code||'').includes('invalid-credential')?'Email or password not recognised.':(e.code||'').includes('weak-password')?'Password is too weak.':(e.message||'Could not sign in');renderSheet()}});
+$('fgOk')&&($('fgOk').onclick=async()=>{email=$('emIn').value.trim();if(!email){msg='Enter your email first.';return renderSheet()}
+try{await fbReset(email);msg='Reset link sent — check your inbox.'}catch(e){msg=e.message||'Could not send the reset link'}renderSheet()});
+$('inBtn')&&($('inBtn').onclick=async()=>{try{await fbSignIn();renderSheet();toast('Signed in')}catch(e){msg='Sign-in failed: '+(e.message||'');renderSheet()}});
 $('pw')&&($('pw').oninput=e=>{pass=e.target.value||null;if(pass&&localStorage.getItem(PW_KEY)!==null)localStorage.setItem(PW_KEY,pass)});
 $('pwRem')&&($('pwRem').onchange=e=>{if(e.target.checked){if(!pass)return toast('Type the passphrase first'),renderSheet();localStorage.setItem(PW_KEY,pass);toast('Saved on this phone')}else{localStorage.removeItem(PW_KEY);toast('Forgotten — you will type it each session')}renderSheet()});
-$('inBtn')&&($('inBtn').onclick=async()=>{try{await fbSignIn();renderSheet();toast('Signed in')}catch(e){toast('Sign-in failed: '+(e.message||''))}});
 $('outBtn')&&($('outBtn').onclick=async()=>{try{await fbSignOut();renderSheet()}catch(e){toast('Error: '+(e.message||''))}});
-$('pushBtn')&&($('pushBtn').onclick=async()=>{if(!pass&&!confirm('No passphrase set — the backup will be stored unencrypted. Continue?'))return;await cloudPush()});
+$('pushBtn')&&($('pushBtn').onclick=async()=>{if(!pass&&!confirm('No passphrase set — the backup will be stored unencrypted and the project owner could read it. Continue?'))return;await cloudPush()});
 $('pullBtn')&&($('pullBtn').onclick=async()=>{try{const{parsed,updatedAt}=await cloudPull();
 const mine=syncMeta().at||0;const newer=updatedAt>mine;
 if(!confirm(`Replace everything on this device with the cloud copy?\n\nCloud saved ${new Date(updatedAt).toLocaleString()}${newer?'':' — older than your last backup here'}.\n${parsed.accounts.length} accounts, ${parsed.txns.length} transactions.`))return;
 D={accounts:parsed.accounts,txns:parsed.txns,budgets:parsed.budgets||{},cats:parsed.cats||{},goals:parsed.goals||[],groups:parsed.groups||[],recurring:parsed.recurring||[],settings:{...(parsed.settings||{}),pinHash:D.settings.pinHash}};
 migrateCats();applyTheme();syncSet({at:updatedAt});sheet=null;save();toast('Restored from cloud')}
 catch(e){toast(e.message||'Restore failed')}});
+$('delAcc')&&($('delAcc').onclick=async()=>{if(!confirm('Delete your cloud account and its backup? Your ledger stays on this device. This cannot be undone.'))return;
+try{await fbDeleteAccount();toast('Account and backup deleted');renderSheet()}catch(e){toast((e.code||'').includes('requires-recent-login')?'Please sign out and back in, then try again':(e.message||'Could not delete'))}});
 $('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup from this device? Your data stays here.'))return;localStorage.removeItem(CFG_KEY);localStorage.removeItem(SYNC_KEY);localStorage.removeItem(PW_KEY);FB=null;FBuser=null;pass=null;openCloud()});
 }};renderSheet();
 if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
 
 // ---------- menu / appearance / pin ----------
 function openMenu(){
-const items=[['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud sync',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
+const items=[['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud backup',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
 sheet={title:'Menu',body(){return`<div class="card menu">${items.map(([k,t,d])=>`<div class="row" data-mi="${k}"><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div><span class="muted">›</span></div>`).join('')}</div><div class="muted" style="text-align:center;margin-top:14px;font-size:12px">Ledger v${VERSION}</div>`},
 wire(){document.querySelectorAll('[data-mi]').forEach(el=>el.onclick=()=>{const k=el.dataset.mi;sheet=null;
 if(k==='wealth')openWealth();else if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
