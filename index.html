@@ -168,7 +168,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.2 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.3 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -380,6 +380,7 @@ ${D.goals.length&&!list.length?`<div class="muted" style="text-align:center">You
 
 function render(){const v=document.getElementById('view');if(tab==='accounts')tab='home';v.innerHTML=tab==='home'?home():tab==='activity'?activity():tab==='reports'?reports():goalsPage();
 v.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{R.cur=b.dataset.rc;localStorage.setItem('ledger-cur',R.cur);F.acct='all';render()});
+if(R.cur==='ALL'&&tab!=='reports'){R.cur=currencies()[0]||'USD';localStorage.setItem('ledger-cur',R.cur);v.innerHTML=tab==='home'?home():tab==='activity'?activity():goalsPage()}
 v.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>openPerson(acct(b.dataset.person)));
 v.querySelector('#mgGroups')?.addEventListener('click',()=>openGroups(ensureCur()));
 v.querySelector('#staleBk')?.addEventListener('click',()=>{if(pass&&FBuser)cloudPush();else openCloud()});
@@ -664,8 +665,10 @@ save();toast(`Imported ${added}${skipped?`, skipped ${skipped} duplicates`:''}`)
 // ---------- reports ----------
 let R={cur:localStorage.getItem('ledger-cur')||'USD',month:mk(today()),year:+today().slice(0,4),catRange:'year',catOpen:null,open:{checking:true,savings:true,credit:true,held:true}};
 const currencies=()=>[...new Set(D.accounts.map(cur))].sort((x,y)=>x==='USD'?-1:y==='USD'?1:0);
-function ensureCur(){const cs=currencies();if(cs.length&&!cs.includes(R.cur))R.cur=cs[0];return R.cur}
-const curToggle=()=>{const cs=currencies();return cs.length>1?`<div class="seg" style="margin:14px 0 0;grid-template-columns:repeat(${cs.length},1fr)">${cs.map(k=>`<button data-rc="${k}" class="${R.cur===k?'on':''}">${k} ${CUR[k].sym}</button>`).join('')}</div>`:''};
+function ensureCur(){if(R.cur==='ALL')return baseCur();const cs=currencies();if(cs.length&&!cs.includes(R.cur))R.cur=cs[0];return R.cur}
+const curToggle=(withAll)=>{const cs=currencies();if(cs.length<2)return'';
+const opts=withAll?[...cs,'ALL']:cs;
+return`<div class="seg" style="margin:14px 0 0;grid-template-columns:repeat(${opts.length},1fr)">${opts.map(k=>`<button data-rc="${k}" class="${R.cur===k?'on':''}">${k==='ALL'?'All '+CUR[baseCur()].sym:k+' '+CUR[k].sym}</button>`).join('')}</div>`};
 const shiftMonth=(m,n)=>{const[y,mo]=m.split('-').map(Number);const d=new Date(y,mo-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
 const monthsOf=y=>Array.from({length:12},(_,i)=>`${y}-${String(i+1).padStart(2,'0')}`);
 const inCur=(t,c)=>cur(acct(t.accountId))===c;
@@ -676,20 +679,22 @@ const sentIn=(m,c)=>sumT(t=>t.type==='transfer'&&inCur(t,c)&&t.toAccountId&&cur(
 function catSpend(m,c){const o={};D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&mk(t.date)===m).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+t.amount});return o}
 function budgetFor(m,c){const b=(D.budgets||{})[c]||{};return b[m]||b.default||{}}
 const pct=(a,b)=>b>0?Math.min(100,Math.round(a/b*100)):0;
+const allSpent=m=>D.txns.filter(t=>t.type==='expense'&&inRange(t.date,m)).reduce((s2,t)=>s2+toBase(t.amount,cur(acct(t.accountId))),0);
+const allEarned=m=>D.txns.filter(t=>t.type==='income'&&inRange(t.date,m)).reduce((s2,t)=>s2+toBase(t.amount,cur(acct(t.accountId))),0);
 const inRange=(d,m)=>m.length===4?d.startsWith(m):mk(d)===m;
 const receivedIn=(m,c)=>D.txns.filter(t=>t.type==='transfer'&&landed(t)&&cur(acct(t.toAccountId))===c&&cur(acct(t.accountId))!==c&&inRange(t.recvDate||t.date,m)).reduce((s,t)=>s+(t.toAmount??t.amount),0);
 const savedIn=(m,c)=>D.txns.filter(t=>t.type==='transfer'&&inCur(t,c)&&cur(acct(t.toAccountId))===c&&(isSavingsAcct(acct(t.toAccountId))||isInvest(acct(t.toAccountId)))&&!isSavingsAcct(acct(t.accountId))&&!isInvest(acct(t.accountId))&&inRange(t.date,m)).reduce((s,t)=>s+t.amount,0);
 const inflowIn=(m,c)=>earnedIn(m,c)+receivedIn(m,c);
 const remainingIn=(m,c)=>inflowIn(m,c)-spentIn(m,c)-sentIn(m,c);
-const catSpendRange=(rng,c)=>{const o={};D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(rng==='all'||inRange(t.date,rng))).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+t.amount});return o};
+const catSpendRange=(rng,c,all)=>{const o={};D.txns.filter(t=>t.type==='expense'&&(all||inCur(t,c))&&(rng==='all'||inRange(t.date,rng))).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+(all?toBase(t.amount,cur(acct(t.accountId))):t.amount)});return o};
 const monthsWithData=(rng,c)=>new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(rng==='all'||inRange(t.date,rng))).map(t=>mk(t.date))).size;
 
 function p_nw(){const b=balances();let v=0;const c=R.cur;D.accounts.forEach(a=>{if(cur(a)!==c)return;
 if(isLoan(a)||isCard(a))v-= (isCard(a)&&a.closeDay?cardState(a).total:-b[a.id]);
 else if(isInvest(a))v+=(investValue(a)??holdings(a).net);else v+=b[a.id]});return v}
 function reports(){const curs=[...new Set(D.accounts.map(cur))].sort((x,y)=>x==='USD'?-1:y==='USD'?1:0);if(!curs.length)return`<div class="h1">Reports</div><div class="empty">Add an account and a few transactions first.</div>`;
-const c=ensureCur(),m=R.month;R.year=+m.slice(0,4);const y=R.year;
-const spent=spentIn(m,c),inflow=inflowIn(m,c),recv=receivedIn(m,c),sent=sentIn(m,c),prev=spentIn(shiftMonth(m,-1),c),remaining=remainingIn(m,c),saved=savedIn(m,c);
+const ALL=R.cur==='ALL';const c=ALL?baseCur():ensureCur(),m=R.month;R.year=+m.slice(0,4);const y=R.year;
+const spent=ALL?allSpent(m):spentIn(m,c),inflow=ALL?allEarned(m):inflowIn(m,c),recv=ALL?0:receivedIn(m,c),sent=ALL?0:sentIn(m,c),prev=ALL?allSpent(shiftMonth(m,-1)):spentIn(shiftMonth(m,-1),c),remaining=ALL?(allEarned(m)-allSpent(m)):remainingIn(m,c),saved=ALL?0:savedIn(m,c);
 const delta=prev>0?Math.round((spent-prev)/prev*100):null;const b=balances();
 // budget vs actual
 const bud=budgetFor(m,c),act=catSpend(m,c);const cats=[...new Set([...Object.keys(bud),...Object.keys(act)])].filter(k=>bud[k]>0||act[k]>0).sort((a,b)=>(bud[b]||0)-(bud[a]||0)||(act[b]||0)-(act[a]||0));
@@ -698,26 +703,28 @@ const scoped=!!((D.budgets||{})[c]||{})[m];
 const brows=cats.map(k=>{const e=bud[k]||0,a=act[k]||0;const over=e>0&&a>e;const col=e===0?'var(--ink3)':over?'var(--out)':'var(--in)';
 return`<div class="brow" data-cat="${esc(k)}" style="cursor:pointer"><div class="l"><span>${esc(k)} <span class="muted" style="font-size:11px">›</span></span><span class="num"><b style="color:${over?'var(--out)':'var(--ink)'}">${money(a,0,c)}</b>${e>0?` of ${money(e,0,c)}`:''}</span></div><div class="track"><i style="width:${e>0?pct(a,e):(tAct?Math.round(a/tAct*100):0)}%;background:${col}"></i></div>${e>0?`<div class="muted num" style="font-size:11px;margin-top:4px">${over?money(a-e,0,c)+' over':money(e-a,0,c)+' left'}</div>`:''}</div>`}).join('');
 // year
-const ms=monthsOf(y).map(k=>({k,v:spentIn(k,c)}));const max=Math.max(...ms.map(x=>x.v),1);const ySpent=spentIn(String(y),c),yIn=inflowIn(String(y),c),ySent=sentIn(String(y),c),yRem=yIn-ySpent-ySent;
+const ms=monthsOf(y).map(k=>({k,v:ALL?allSpent(k):spentIn(k,c)}));const max=Math.max(...ms.map(x=>x.v),1);const ySpent=ALL?allSpent(String(y)):spentIn(String(y),c),yIn=ALL?allEarned(String(y)):inflowIn(String(y),c),ySent=ALL?0:sentIn(String(y),c),yRem=yIn-ySpent-ySent;
 const years=[...new Set(D.txns.map(t=>t.date.slice(0,4)))].sort().reverse();
 return`<div class="h1">Reports</div>
-${curToggle()}
+${curToggle(currencies().length>1)}
+${R.cur==='ALL'?`<div class="muted" style="font-size:11px;margin:8px 4px 0;line-height:1.45">Both currencies converted at ₹${fxRate()} per $${D.settings.fxLiveAt&&fxSource()==='live'?' · market rate, updated '+(daysSince(D.settings.fxLiveAt)===0?'today':dlabel(D.settings.fxLiveAt,1)):fxSource()==='transfer'?' · your last transfer rate':' · rate you set'}. Transfers between your own accounts are excluded. <button class="link" id="allFx" style="font-size:11px">Change ›</button></div>`:''}
 <div class="mnav"><button data-mo="-1" aria-label="Previous month">‹</button><button id="pickMonth" style="width:auto;flex:1;font-size:16px;font-weight:700;color:var(--ink)">${mlabel(m)} <span style="font-size:12px;color:var(--ink3)">▾</span></button><button data-mo="1" aria-label="Next month">›</button></div>
-<div class="kpi" style="${recv>0?'grid-template-columns:1fr 1fr':''}"><div class="stat"><span>Spent</span><b class="num out">${money(spent,0,c)}</b><i class="num">${delta==null?'no prior month':(delta>0?'+':'')+delta+'% vs '+mlabel(shiftMonth(m,-1)).split(' ')[0]}</i></div>${recv>0?`<div class="stat"><span>Received from abroad</span><b class="num in">${money(recv,0,c)}</b><i>transfers in, not income</i></div>`:''}<div class="stat"><span>Earned</span><b class="num in">${money(earnedIn(m,c),0,c)}</b><i>income entries only</i></div><div class="stat"><span>Remaining</span><b class="num" style="color:${remaining>=0?'var(--in)':'var(--out)'}">${money(remaining,0,c)}</b><i>${recv>0?'received + earned − spent':'earned − spent'}${sent>0?' − sent':''}</i></div></div>
+<div class="kpi" style="${recv>0?'grid-template-columns:1fr 1fr':''}"><div class="stat"><span>Spent</span><b class="num out">${money(spent,0,c)}</b><i class="num">${delta==null?'no prior month':(delta>0?'+':'')+delta+'% vs '+mlabel(shiftMonth(m,-1)).split(' ')[0]}</i></div>${recv>0?`<div class="stat"><span>Received from abroad</span><b class="num in">${money(recv,0,c)}</b><i>transfers in, not income</i></div>`:''}<div class="stat"><span>Earned</span><b class="num in">${money(ALL?allEarned(m):earnedIn(m,c),0,c)}</b><i>${ALL?'both currencies':'income entries only'}</i></div><div class="stat"><span>Remaining</span><b class="num" style="color:${remaining>=0?'var(--in)':'var(--out)'}">${money(remaining,0,c)}</b><i>${ALL?'earned − spent, transfers excluded':(recv>0?'received + earned − spent':'earned − spent')}${sent>0?' − sent':''}</i></div></div>
 ${fxSection(c,y)}
-<div class="sec">Expected vs actual<span class="r"><button class="link" id="setBud">${tExp?'Edit expected':'Set expected amounts'}</button></span></div>
+${ALL?'<div class="muted" style="font-size:11px;margin:16px 4px 0">Expected amounts are set per currency — switch to a single currency to see them.</div>':''}
+${ALL?'':`<div class="sec">Expected vs actual<span class="r"><button class="link" id="setBud">${tExp?'Edit expected':'Set expected amounts'}</button></span></div>
 <div class="card">${tExp?`<div class="brow" style="background:var(--bg)"><div class="l"><span><b>All categories</b>${scoped?' <span class="muted" style="font-size:11px">(set for this month)</span>':''}</span><span class="num"><b style="color:${tAct>tExp?'var(--out)':'var(--ink)'}">${money(tAct,0,c)}</b> of ${money(tExp,0,c)}</span></div><div class="track"><i style="width:${pct(tAct,tExp)}%;background:${tAct>tExp?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${tAct>tExp?money(tAct-tExp,0,c)+' over budget':money(tExp-tAct,0,c)+' left this month'}</div></div>`:''}
-${brows||'<div class="empty" style="padding:28px 0">No spending in this month yet.</div>'}</div>
+${brows||'<div class="empty" style="padding:28px 0">No spending in this month yet.</div>'}</div>`}
 <div class="sec"><span>${y}</span><span class="r num"><span class="out">−${money(ySpent,0,c)}</span>&nbsp;&nbsp;<span class="in">+${money(yIn,0,c)}${receivedIn(String(y),c)>0?' in':''}</span>${ySent?`&nbsp;&nbsp;<span class="mv">↗ ${money(ySent,0,c)}</span>`:''}</span></div>
 <div class="muted num" style="margin:-4px 4px 8px">Remaining in ${y}: <b style="color:${yRem>=0?'var(--in)':'var(--out)'}">${money(yRem,0,c)}</b></div>
 ${(()=>{const c2=c;const cats2=[...new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c2)&&t.date.startsWith(String(y))).map(t=>t.category||'Other'))];
-const data=ms.map(x=>({k:x.k,sp:x.v,in:inflowIn(x.k,c2),net:remainingIn(x.k,c2)}));
+const data=ms.map(x=>({k:x.k,sp:x.v,in:ALL?allEarned(x.k):inflowIn(x.k,c2),net:ALL?(allEarned(x.k)-allSpent(x.k)):remainingIn(x.k,c2)}));
 const live=data.filter(d=>d.sp>0||d.in>0);
 const showAll=R.chartAll===true;const shown=(live.length>6&&!showAll)?live.slice(-6):live;
 const mode=R.chartMode||'flow';
 const max=Math.max(...shown.map(d=>Math.max(d.sp,d.in)),1);
 const catCols=['var(--mv)','var(--out)','var(--in)','#EDA100','#7E22CE','#0F766E'];
-const stackOf=m=>{const o={};D.txns.forEach(t=>{if(t.type!=='expense'||!inCur(t,c2)||mk(t.date)!==m)return;const k2=t.category||'Other';o[k2]=(o[k2]||0)+t.amount});return o};
+const stackOf=m=>{const o={};D.txns.forEach(t=>{if(t.type!=='expense'||mk(t.date)!==m)return;if(!ALL&&!inCur(t,c2))return;const k2=t.category||'Other';o[k2]=(o[k2]||0)+(ALL?toBase(t.amount,cur(acct(t.accountId))):t.amount)});return o};
 const smax=Math.max(...shown.map(d=>d.sp),1);
 const f2=v=>money(v,0,c2);
 if(!live.length)return'';
@@ -744,8 +751,8 @@ return`<div style="border-top:1px solid var(--line);padding:10px 12px 0"><div cl
 <svg class="nw" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${area}" fill="var(--mvS)"/><path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/></svg>
 <div class="l" style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);padding:0 0 8px"><span>${mlabel(live[0].k).split(' ')[0]} ${money(vals[0],0,c2)}</span><span>now ${money(vals[vals.length-1],0,c2)}</span></div></div>`})()}
 <div style="border-top:1px solid var(--line)">${[...live].reverse().map(d=>`<div class="mrow" data-jump="${d.k}"><div class="top"><span>${mlabel(d.k).split(' ')[0]}</span><span class="num" style="color:${d.net>=0?'var(--in)':'var(--out)'}">${f2(d.net)}</span></div><div class="sub num">−${f2(d.sp)} spent · +${f2(d.in)} in</div></div>`).join('')}</div></div>`})()}
-${(()=>{const rng=R.catRange==='all'?'all':String(y);const cs=catSpendRange(rng,c);const tot=Object.values(cs).reduce((a,b)=>a+b,0);const nM=Math.max(1,monthsWithData(rng,c));
-const prevCs=R.catRange==='all'?null:catSpendRange(String(y-1),c);const hasPrev=prevCs&&Object.keys(prevCs).length>0;
+${(()=>{const rng=R.catRange==='all'?'all':String(y);const cs=catSpendRange(rng,c,ALL);const tot=Object.values(cs).reduce((a,b)=>a+b,0);const nM=Math.max(1,monthsWithData(rng,c));
+const prevCs=R.catRange==='all'?null:catSpendRange(String(y-1),c,ALL);const hasPrev=prevCs&&Object.keys(prevCs).length>0;
 const list=Object.entries(cs).sort((a,b)=>b[1]-a[1]);const top=list[0]?.[1]||1;
 const rows=list.map(([k,v])=>{const open=R.catOpen===k;const pv=hasPrev?(prevCs[k]||0):0;const ch=hasPrev&&pv>0?Math.round((v-pv)/pv*100):null;
 let detail='';if(open){const mm=(R.catRange==='all'?[...new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(t.category||'Other')===k).map(t=>mk(t.date)))].sort():monthsOf(y)).map(mk_=>({k:mk_,v:D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(t.category||'Other')===k&&mk(t.date)===mk_).reduce((a,t)=>a+t.amount,0)}));const mx=Math.max(...mm.map(x=>x.v),1);
@@ -766,6 +773,7 @@ function wireReports(v){v.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=
 v.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{R.month=b.dataset.jump;render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{R.month=b.dataset.year+R.month.slice(4);render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
+v.querySelector('#allFx')?.addEventListener('click',openWealth);
 v.querySelector('#chartMode')?.addEventListener('click',()=>{R.chartMode=(R.chartMode||'flow')==='flow'?'cat':'flow';render()});
 v.querySelector('#chartSpan')?.addEventListener('click',()=>{R.chartAll=!R.chartAll;render()});
 v.querySelectorAll('[data-catrange]').forEach(b=>b.onclick=()=>{R.catRange=b.dataset.catrange;render()});
@@ -1000,11 +1008,17 @@ return`<div class="kpi" style="grid-template-columns:1fr 1fr;margin:0 0 12px"><d
 <div class="stat"><span>Invested</span><b class="num">${f(h.net)}</b><i>${h.proceeds>0?f(h.proceeds)+' taken out':'net of sales'}</i></div>
 <div class="stat"><span>Profit / loss</span><b class="num" style="color:${pl==null?'var(--ink3)':pl>=0?'var(--in)':'var(--out)'}">${pl==null?'—':(pl>=0?'+':'−')+f(Math.abs(pl))}</b><i>${pl!=null&&h.net>0?((pl/h.net)*100).toFixed(1)+'%':'set a rate'}</i></div>
 <div class="stat"><span>${a.kind==='bond'||a.kind==='ppf'?'Interest rate':a.state?esc(a.state)+' rate':'Rate updated'}</span><b class="num">${a.kind==='bond'||a.kind==='ppf'?(a.rate||0)+'%':(a.rateAt?dlabel(a.rateAt):'—')}</b><i>${a.kind==='bond'||a.kind==='ppf'?'accrues daily':'you set it'}</i></div></div>
+${a.kind==='gold'?(()=>{const age=daysSince(a.rateAt);const err=D.settings.goldErr;
+if(err&&err===today())return`<div class="note out" style="margin:0 0 12px;font-size:12px">Couldn't update the gold rate — still using your ${age===0?'saved':age+'-day-old'} figure. <button class="link" id="goldRetry" style="font-size:12px">Retry</button></div>`;
+if(a.rateAt&&age<=1)return`<div class="muted" style="font-size:11px;margin-bottom:10px">Rate updated ${age===0?'today':'yesterday'} automatically${a.cal?.ratio?` with your ${((a.cal.ratio-1)*100).toFixed(1)}% local premium`:''}.</div>`;
+if(a.rateAt&&age>=7)return`<div class="note out" style="margin:0 0 12px;font-size:12px">Rate is ${age} days old. <button class="link" id="goldRetry" style="font-size:12px">Update now</button></div>`;
+return''})():''}
 ${rateRows?`<div class="card" style="padding:12px 14px;margin-bottom:12px">${rateRows}<div class="tools" style="margin-top:10px"><button class="btn p" id="saveRate" style="width:auto">Save rate</button>${a.kind==='gold'?`<button class="btn" id="fetchRate" style="width:auto"${busy?' disabled':''}>${busy?'Fetching…':'Fetch today\'s rate'}</button>`:''}</div>${msg?`<div class="muted" style="margin-top:8px;font-size:12px">${esc(msg)}</div>`:''}</div>`:''}
 ${txs.length?`<div class="sec" style="margin-top:4px">History</div><div class="card">${txs.map(t=>txnRow(t,1)).join('')}</div>`:'<div class="empty" style="padding:20px 0">Nothing recorded yet — use the Invest option on +.</div>'}
 <button class="btn" id="editAcct" style="margin-top:14px">Edit investment</button>`},
 wire(){const $=id=>document.getElementById(id);
 $('saveRate')&&($('saveRate').onclick=()=>{a.rates=a.rates||{};document.querySelectorAll('[data-rk]').forEach(i=>{const v=parseFloat(i.value);if(v>0)a.rates[i.dataset.rk]=v;else delete a.rates[i.dataset.rk]});a.rateAt=today();localStorage.setItem(KEY,JSON.stringify(D));toast('Rate saved');renderSheet()});
+$('goldRetry')&&($('goldRetry').onclick=()=>{delete D.settings.goldAt;delete D.settings.goldErr;localStorage.setItem(KEY,JSON.stringify(D));toast('Updating…');autoRates()});
 $('fetchRate')&&($('fetchRate').onclick=async()=>{busy=true;msg='';renderSheet();
 try{const r=await fetchGold(c);const ratio=a.cal?.ratio||1;a.rates=a.rates||{};Object.entries(r.perGram).forEach(([k,v])=>{a.rates[k]=Math.round(v*ratio*100)/100});a.rateAt=today();localStorage.setItem(KEY,JSON.stringify(D));msg=ratio===1?`Market rate from ${r.source} — Indian retail runs about 10-15% higher. Open Edit investment to set your state's rate once and the premium is remembered.`:`Market rate from ${r.source} plus your ${((ratio-1)*100).toFixed(1)}% local premium${a.state?' ('+a.state+')':''}.`}
 catch(e){msg="Couldn't fetch a rate (offline, or the price service is unavailable). Type it in instead."}
@@ -1455,7 +1469,12 @@ ${ideas.length?`<div class="card">${ideas.map((i,n)=>`<div class="brow"><div cla
 :'<div class="empty" style="padding:18px 0;font-size:13px">No spending recorded to suggest cuts from yet.</div>'}
 <div class="card" style="padding:12px 14px;margin-top:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">Exchange rate · ₹${p.fx} per $</div>
 <div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['transfer','My last transfer'],['live','Live market'],['manual','I set it']].map(([v,l])=>`<button data-fxm="${v}" class="${fxSource()===v?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div>
-<div class="muted num" style="font-size:11px;margin-top:8px">${lastTransferFx()?`Your last transfer: ₹${lastTransferFx()}`:'No India transfer recorded yet'}${D.settings.fxLive?` · market ₹${D.settings.fxLive}${D.settings.fxLiveAt?' ('+dlabel(D.settings.fxLiveAt)+')':''}`:''}</div>
+<div class="muted num" style="font-size:11px;margin-top:8px">${lastTransferFx()?`Your last transfer: ₹${lastTransferFx()}`:'No India transfer recorded yet'}${D.settings.fxLive?` · market ₹${D.settings.fxLive}`:''}</div>
+${(()=>{const age=fxStale();const err=D.settings.fxErr;
+if(!D.settings.fxLive&&!err)return'';
+if(err&&err===today()&&age>=1)return`<div class="note out" style="margin:8px 0 0;font-size:11px">Couldn't update the rate — still using ₹${D.settings.fxLive||fxRate()}${D.settings.fxLiveAt?' from '+dlabel(D.settings.fxLiveAt,1):''}. <button class="link" id="fxRetry" style="font-size:11px">Retry</button></div>`;
+if(age>=7)return`<div class="note out" style="margin:8px 0 0;font-size:11px">Market rate is ${age} days old. <button class="link" id="fxRetry" style="font-size:11px">Update now</button></div>`;
+return`<div class="muted" style="font-size:11px;margin-top:4px">Market rate updated ${age===0?'today':dlabel(D.settings.fxLiveAt,1)} · refreshes itself daily</div>`})()}
 ${fxSource()==='manual'?`<label class="field" style="margin:10px 0 0"><div>Your rate (₹ per $)</div><input id="wfx" class="num" inputmode="decimal" value="${D.settings.fx||p.fx}"></label>`:''}
 ${fxSource()==='live'?`<button class="btn" id="wfxFetch" style="margin-top:10px"${st.fxBusy?' disabled':''}>${st.fxBusy?'Fetching…':"Fetch today's rate"}</button>`:''}
 ${st.fxMsg?`<div class="muted" style="font-size:11px;margin-top:8px">${esc(st.fxMsg)}</div>`:''}
@@ -1482,6 +1501,7 @@ $('ooHelp')&&($('ooHelp').onclick=()=>toast('Open a transaction and tick "One-of
 document.querySelectorAll('[data-wcur]').forEach(b=>b.onclick=()=>{st.wCur=b.dataset.wcur;save();openWealth()});
 document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';save();openWealth()});
 $('wfx')&&($('wfx').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){st.fx=v;st.fxMode='manual';save();openWealth()}});
+$('fxRetry')&&($('fxRetry').onclick=async()=>{try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;save();openWealth();toast('Rate updated')}catch(e){D.settings.fxErr=today();save();toast("Still couldn't reach the rate service")}});
 $('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';save();openWealth();
 try{const r=await fetchFx('USD','INR');st.fxLive=+r.toFixed(2);st.fxLiveAt=today();st.fxMsg=`Market rate ₹${st.fxLive} per $.${lastTransferFx()?` You last converted at ₹${lastTransferFx()}.`:''}`}
 catch(e){st.fxMsg="Couldn't reach a rate service — set it yourself instead."}
@@ -1489,6 +1509,22 @@ st.fxBusy=false;save();openWealth()});
 $('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;save();openWealth()});
 $('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wExtra;delete st.wCuts;save();sheet=null;render()});
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
+
+// ---------- daily rate refresh ----------
+const daysSince=d=>d?Math.floor((new Date(today())-new Date(d))/864e5):999;
+const fxStale=()=>daysSince(D.settings.fxLiveAt);
+async function autoRates(){if(!navigator.onLine)return;
+// USD/INR once a day
+if(daysSince(D.settings.fxLiveAt)>=1){try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;localStorage.setItem(KEY,JSON.stringify(D))}
+catch(e){D.settings.fxErr=today();localStorage.setItem(KEY,JSON.stringify(D))}}
+// gold once a day, per currency in use, keeping each account's local premium
+const golds=D.accounts.filter(a=>isInvest(a)&&a.kind==='gold'&&a.autoRate!==false);
+if(golds.length&&daysSince(D.settings.goldAt)>=1){
+try{const byCur={};for(const a of golds){const c=cur(a);if(!byCur[c])byCur[c]=await fetchGold(c);
+const r=byCur[c];const ratio=a.cal?.ratio||1;a.rates=a.rates||{};['18','22','24'].forEach(k=>{a.rates[k]=Math.round(r.perGram[k]*ratio*100)/100});a.rateAt=today()}
+D.settings.goldAt=today();delete D.settings.goldErr;localStorage.setItem(KEY,JSON.stringify(D))}
+catch(e){D.settings.goldErr=today();localStorage.setItem(KEY,JSON.stringify(D))}}
+if(tab==='reports'||sheet)render()}
 
 // ---------- cloud sync (Firebase + passphrase) ----------
 const CFG_KEY='ledger-fb';const SYNC_KEY='ledger-sync';const PW_KEY='ledger-pw';
@@ -1668,7 +1704,7 @@ if(m&&m[1]!==VERSION){const el=document.createElement('div');el.style.cssText='p
 el.innerHTML='<span style="flex:1">Version '+m[1].split(' ')[0]+' is available.</span><button style="background:#fff;color:var(--accent);border:0;border-radius:8px;padding:7px 12px;font:inherit;font-weight:600">Update</button>';
 el.querySelector('button').onclick=()=>{location.replace(location.pathname+'?v='+Date.now())};document.body.appendChild(el)}}catch(e){}})();
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
-try{migrateCats();applyTheme();render();if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
+try{migrateCats();applyTheme();render();setTimeout(()=>{try{autoRates()}catch(e){}},1500);if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
 </script>
 </body>
 </html>
