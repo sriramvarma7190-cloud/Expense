@@ -168,7 +168,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.3 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.4 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -307,7 +307,8 @@ const pend=t.type==='transfer'&&!landed(t);
 const ooTag=isOneOff(t)?' · one-off':'';
 const sub=t.lent?('Owed to you · '+esc(to?.bank||to?.name||''))+(t.category?' · '+t.category:''):t.type==='transfer'&&inv?((t.sell?'Sold':'Invested')+(t.units?' · '+(+t.units)+' '+unitLabel(isInvest(to)?to:f):'')+(t.purity?' '+PURITY[t.purity].label:'')):t.type==='transfer'?((pend?'<b style="color:var(--out)">In transit</b> · ':'')+(fx?`1 ${cur(f)} = ${(t.toAmount/t.amount).toLocaleString('en-US',{maximumFractionDigits:2})} ${cur(to)}`:'Transfer')+(t.recvDate&&t.recvDate!==t.date?` · lands ${dlabel(t.recvDate,1)}`:'')):`${t.category||''}${f?' · '+f.name:''}${ooTag}`;
 const amt=t.type==='expense'?money(-t.amount,1,cur(f)):t.type==='income'?money(t.amount,1,cur(f)):fx?`${money(t.amount,0,cur(f))}<small style="color:var(--mv)">→ ${money(t.toAmount,0,cur(to))}</small>`:money(t.amount,0,cur(f));
-return`<div class="row" data-txn="${t.id}"><div class="bar" style="background:${soft}"><i style="background:${hard}"></i></div><div class="main"><div class="t" style="font-weight:500">${esc(title)}</div><div class="s">${showDate?dlabel(t.date)+' · ':''}${esc(sub)}</div></div><div class="amt num ${cls}">${amt}</div></div>`}
+const conv=(typeof F!=='undefined'&&F.all&&f&&cur(f)!==baseCur())?`<small class="muted">= ${money(toBase(t.amount,cur(f)),0,baseCur())}</small>`:'';
+return`<div class="row" data-txn="${t.id}"><div class="bar" style="background:${soft}"><i style="background:${hard}"></i></div><div class="main"><div class="t" style="font-weight:500">${esc(title)}</div><div class="s">${showDate?dlabel(t.date)+' · ':''}${esc(sub)}</div></div><div class="amt num ${cls}">${amt}${conv}</div></div>`}
 
 // ---------- views ----------
 function home(){const b=balances();
@@ -342,20 +343,20 @@ ${transit.length?`<div class="sec">In transit<span class="r">not yet credited</s
 <div class="sec">Accounts<span class="r"><button class="link" id="addAcct" style="font-size:12px">Add account</button></span></div>
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
 
-let F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false};
+let F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};
 function activity(){const c=ensureCur();const s=F.q.trim().toLowerCase();
-const list=[...D.txns].filter(t=>F.acct==='all'||t.accountId===F.acct||t.toAccountId===F.acct).filter(t=>F.type==='all'||t.type===F.type).filter(t=>!F.cat||(t.category||'Other')===F.cat).filter(t=>!F.month||mk(t.date)===F.month).filter(t=>!F.year||t.date.startsWith(F.year)).filter(t=>!F.oneOff||isOneOff(t)).filter(t=>cur(acct(t.accountId))===c||(t.type==='transfer'&&cur(acct(t.toAccountId))===c)).filter(t=>!s||(t.note||'').toLowerCase().includes(s)||(t.category||'').toLowerCase().includes(s)||(acct(t.accountId)?.name||'').toLowerCase().includes(s)).sort((x,y)=>y.date.localeCompare(x.date)||y.created-x.created);
+const list=[...D.txns].filter(t=>F.acct==='all'||t.accountId===F.acct||t.toAccountId===F.acct).filter(t=>F.type==='all'||t.type===F.type).filter(t=>!F.cat||(t.category||'Other')===F.cat).filter(t=>!F.month||mk(t.date)===F.month).filter(t=>!F.year||t.date.startsWith(F.year)).filter(t=>!F.oneOff||isOneOff(t)).filter(t=>F.all||cur(acct(t.accountId))===c||(t.type==='transfer'&&cur(acct(t.toAccountId))===c)).filter(t=>!s||(t.note||'').toLowerCase().includes(s)||(t.category||'').toLowerCase().includes(s)||(acct(t.accountId)?.name||'').toLowerCase().includes(s)).sort((x,y)=>y.date.localeCompare(x.date)||y.created-x.created);
 const groups=[];list.forEach(t=>{const k=mk(t.date);let g=groups.find(x=>x.k===k);if(!g){g={k,items:[],out:{},inn:{}};groups.push(g)}g.items.push(t);const c=cur(acct(t.accountId));if(t.type==='expense')g.out[c]=(g.out[c]||0)+t.amount;if(t.type==='income')g.inn[c]=(g.inn[c]||0)+t.amount});
 const tot=(o,cls,sg)=>Object.entries(o).map(([c,v])=>`<span class="${cls}">${sg}${money(v,0,c)}</span>`).join('&nbsp;&nbsp;');
 return`<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Activity</div></div>
-${curToggle()}<input id="q" value="${esc(F.q)}" placeholder="Search notes, categories, accounts" style="margin-top:10px;font-size:14px;padding:9px 12px">
+${F.all?'':curToggle()}<input id="q" value="${esc(F.q)}" placeholder="Search notes, categories, accounts" style="margin-top:10px;font-size:14px;padding:9px 12px">
 <div class="filters"><select id="fa"><option value="all">All accounts</option>${D.accounts.filter(a=>cur(a)===c).map(a=>`<option value="${a.id}"${F.acct===a.id?' selected':''}>${esc(a.name)}</option>`).join('')}</select><select id="ft">${[['all','All types'],['expense','Expenses'],['income','Income'],['transfer','Transfers']].map(([v,l])=>`<option value="${v}"${F.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
-${F.cat||F.month||F.year||F.oneOff?`<div class="tools"><button class="btn" id="clearF" style="background:var(--mvS);color:var(--mv)">${F.oneOff?'One-offs':F.month?mlabel(F.month):F.year?F.year:'All time'}${F.cat?' · '+esc(F.cat):''} &nbsp;×</button></div>`:''}
+${F.cat||F.month||F.year||F.oneOff?`<div class="tools"><button class="btn" id="clearF" style="background:var(--mvS);color:var(--mv)">${F.all?(F.cat?esc(F.cat)+' · all currencies':'All currencies'):F.oneOff?'One-offs':F.month?mlabel(F.month):F.year?F.year:'All time'}${F.cat?' · '+esc(F.cat):''} &nbsp;×</button></div>`:''}
 <div class="tools"><button class="btn" id="exp">Export CSV</button><button class="btn" id="imp">Import CSV</button><input type="file" id="impFile" accept=".csv,text/csv" hidden></div>
-${(()=>{const active=s||F.cat||F.acct!=='all'||F.type!=='all'||F.month||F.year;if(!active||!list.length)return'';
+${(()=>{const active=s||F.cat||F.acct!=='all'||F.type!=='all'||F.month||F.year||F.all;if(!active||!list.length)return'';
 const byC={};const add=(o,c,v)=>{o[c]=(o[c]||0)+v};
 const years={},months={},tot={};let n=0;
-list.forEach(t=>{const c=cur(acct(t.accountId));const v=t.type==='expense'?-t.amount:t.type==='income'?t.amount:0;if(!v)return;n++;
+list.forEach(t=>{const c=F.all?baseCur():cur(acct(t.accountId));const raw=t.type==='expense'?-t.amount:t.type==='income'?t.amount:0;if(!raw)return;const v=F.all?toBase(raw,cur(acct(t.accountId))):raw;n++;
 years[t.date.slice(0,4)]=years[t.date.slice(0,4)]||{};add(years[t.date.slice(0,4)],c,v);months[mk(t.date)]=months[mk(t.date)]||{};add(months[mk(t.date)],c,v);add(tot,c,v)});
 const fm=o=>Object.entries(o).map(([c,v])=>`<span class="num ${v<0?'out':'in'}">${money(v,1,c)}</span>`).join(' &nbsp;');
 const label=[s?`"${esc(F.q.trim())}"`:'',F.cat?esc(F.cat):'',F.type!=='all'?F.type:'',F.acct!=='all'?esc(acct(F.acct)?.name||''):''].filter(Boolean).join(' · ');
@@ -401,7 +402,7 @@ if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(
 const q=v.querySelector('#q');if(q){q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
 v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
 v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render()});
-v.querySelector('#clearF')?.addEventListener('click',()=>{F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false};render()});
+v.querySelector('#clearF')?.addEventListener('click',()=>{F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};render()});
 v.querySelector('#exp')?.addEventListener('click',exportCSV);
 v.querySelector('#imp')?.addEventListener('click',()=>document.getElementById('impFile').click());
 v.querySelector('#impFile')?.addEventListener('change',importCSV);
@@ -707,50 +708,23 @@ const ms=monthsOf(y).map(k=>({k,v:ALL?allSpent(k):spentIn(k,c)}));const max=Math
 const years=[...new Set(D.txns.map(t=>t.date.slice(0,4)))].sort().reverse();
 return`<div class="h1">Reports</div>
 ${curToggle(currencies().length>1)}
-${R.cur==='ALL'?`<div class="muted" style="font-size:11px;margin:8px 4px 0;line-height:1.45">Both currencies converted at ₹${fxRate()} per $${D.settings.fxLiveAt&&fxSource()==='live'?' · market rate, updated '+(daysSince(D.settings.fxLiveAt)===0?'today':dlabel(D.settings.fxLiveAt,1)):fxSource()==='transfer'?' · your last transfer rate':' · rate you set'}. Transfers between your own accounts are excluded. <button class="link" id="allFx" style="font-size:11px">Change ›</button></div>`:''}
+${R.cur==='ALL'?rateLine('Both currencies')+'<div class="muted" style="font-size:11px;margin:2px 4px 0">Transfers between your own accounts are excluded.</div>':''}
 <div class="mnav"><button data-mo="-1" aria-label="Previous month">‹</button><button id="pickMonth" style="width:auto;flex:1;font-size:16px;font-weight:700;color:var(--ink)">${mlabel(m)} <span style="font-size:12px;color:var(--ink3)">▾</span></button><button data-mo="1" aria-label="Next month">›</button></div>
 <div class="kpi" style="${recv>0?'grid-template-columns:1fr 1fr':''}"><div class="stat"><span>Spent</span><b class="num out">${money(spent,0,c)}</b><i class="num">${delta==null?'no prior month':(delta>0?'+':'')+delta+'% vs '+mlabel(shiftMonth(m,-1)).split(' ')[0]}</i></div>${recv>0?`<div class="stat"><span>Received from abroad</span><b class="num in">${money(recv,0,c)}</b><i>transfers in, not income</i></div>`:''}<div class="stat"><span>Earned</span><b class="num in">${money(ALL?allEarned(m):earnedIn(m,c),0,c)}</b><i>${ALL?'both currencies':'income entries only'}</i></div><div class="stat"><span>Remaining</span><b class="num" style="color:${remaining>=0?'var(--in)':'var(--out)'}">${money(remaining,0,c)}</b><i>${ALL?'earned − spent, transfers excluded':(recv>0?'received + earned − spent':'earned − spent')}${sent>0?' − sent':''}</i></div></div>
 ${fxSection(c,y)}
-${ALL?'<div class="muted" style="font-size:11px;margin:16px 4px 0">Expected amounts are set per currency — switch to a single currency to see them.</div>':''}
-${ALL?'':`<div class="sec">Expected vs actual<span class="r"><button class="link" id="setBud">${tExp?'Edit expected':'Set expected amounts'}</button></span></div>
-<div class="card">${tExp?`<div class="brow" style="background:var(--bg)"><div class="l"><span><b>All categories</b>${scoped?' <span class="muted" style="font-size:11px">(set for this month)</span>':''}</span><span class="num"><b style="color:${tAct>tExp?'var(--out)':'var(--ink)'}">${money(tAct,0,c)}</b> of ${money(tExp,0,c)}</span></div><div class="track"><i style="width:${pct(tAct,tExp)}%;background:${tAct>tExp?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${tAct>tExp?money(tAct-tExp,0,c)+' over budget':money(tExp-tAct,0,c)+' left this month'}</div></div>`:''}
-${brows||'<div class="empty" style="padding:28px 0">No spending in this month yet.</div>'}</div>`}
-<div class="sec"><span>${y}</span><span class="r num"><span class="out">−${money(ySpent,0,c)}</span>&nbsp;&nbsp;<span class="in">+${money(yIn,0,c)}${receivedIn(String(y),c)>0?' in':''}</span>${ySent?`&nbsp;&nbsp;<span class="mv">↗ ${money(ySent,0,c)}</span>`:''}</span></div>
-<div class="muted num" style="margin:-4px 4px 8px">Remaining in ${y}: <b style="color:${yRem>=0?'var(--in)':'var(--out)'}">${money(yRem,0,c)}</b></div>
-${(()=>{const c2=c;const cats2=[...new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c2)&&t.date.startsWith(String(y))).map(t=>t.category||'Other'))];
-const data=ms.map(x=>({k:x.k,sp:x.v,in:ALL?allEarned(x.k):inflowIn(x.k,c2),net:ALL?(allEarned(x.k)-allSpent(x.k)):remainingIn(x.k,c2)}));
-const live=data.filter(d=>d.sp>0||d.in>0);
-const showAll=R.chartAll===true;const shown=(live.length>6&&!showAll)?live.slice(-6):live;
-const mode=R.chartMode||'flow';
-const max=Math.max(...shown.map(d=>Math.max(d.sp,d.in)),1);
-const catCols=['var(--mv)','var(--out)','var(--in)','#EDA100','#7E22CE','#0F766E'];
-const stackOf=m=>{const o={};D.txns.forEach(t=>{if(t.type!=='expense'||mk(t.date)!==m)return;if(!ALL&&!inCur(t,c2))return;const k2=t.category||'Other';o[k2]=(o[k2]||0)+(ALL?toBase(t.amount,cur(acct(t.accountId))):t.amount)});return o};
-const smax=Math.max(...shown.map(d=>d.sp),1);
-const f2=v=>money(v,0,c2);
-if(!live.length)return'';
-if(live.length===1){const only=live[0];const o=stackOf(only.k);const e=Object.entries(o).sort((x,z)=>z[1]-x[1]);const tot=e.reduce((a2,[,v])=>a2+v,0)||1;
-return`<div class="card"><div class="muted" style="font-size:12px;padding:12px 14px 4px">${mlabel(only.k)} by category — the chart appears once you have two months</div>
-${e.map(([k2,v],i)=>`<div class="brow" data-cat="${esc(k2)}" style="cursor:pointer;padding:8px 14px"><div class="l"><span>${esc(k2)}</span><span class="num">${f2(v)}</span></div><div class="track"><i style="width:${Math.round(v/tot*100)}%;background:${catCols[i%catCols.length]}"></i></div></div>`).join('')}
-<div class="mrow" style="border-top:1px solid var(--line)"><div class="top"><span>${mlabel(only.k).split(' ')[0]}</span><span class="num" style="color:${only.net>=0?'var(--in)':'var(--out)'}">${f2(only.net)}</span></div><div class="sub num">−${f2(only.sp)} spent · +${f2(only.in)} in</div></div></div>`}
-return`<div class="card">
-<div class="l" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px 2px">
-<div class="lg">${mode==='flow'?`<span><s style="background:var(--out)"></s> Spent</span><span><s style="background:var(--in)"></s> In</span>`:Object.keys(stackOf(shown[shown.length-1].k)).slice(0,4).map((k2,i)=>`<span><s style="background:${catCols[i%catCols.length]}"></s> ${esc(k2)}</span>`).join('')}</div>
-<button class="link" id="chartMode" style="font-size:11px">${mode==='flow'?'By category ›':'Spent vs in ›'}</button></div>
-${mode==='flow'?`<div class="pbars">${shown.map(d=>`<div class="m ${d.k===m?'on':''}" data-jump="${d.k}" title="${mlabel(d.k)}"><div class="pair"><i class="sp" style="height:${Math.round(d.sp/max*100)}%"></i><i class="in" style="height:${Math.round(d.in/max*100)}%"></i></div></div>`).join('')}</div>`
-:`<div class="stack">${shown.map(d=>{const o=stackOf(d.k);const e=Object.entries(o).sort((x,z)=>z[1]-x[1]).slice(0,6);const h=d.sp/smax*100;
-return`<div class="m" data-jump="${d.k}" title="${mlabel(d.k)}" style="height:100%"><div style="height:${Math.round(100-h)}%"></div>${e.map(([k2,v],i)=>`<b style="height:${Math.round(v/(d.sp||1)*h)}%;background:${catCols[i%catCols.length]}"></b>`).join('')}</div>`}).join('')}</div>`}
-<div class="ylab">${shown.map(d=>`<span>${'JFMAMJJASOND'[+d.k.slice(5)-1]}</span>`).join('')}</div>
-${live.length>6?`<div style="text-align:center;padding:0 0 8px"><button class="link" id="chartSpan" style="font-size:11px">${showAll?'Show last 6 months':'Show the whole year'}</button></div>`:''}
-${(()=>{const pts=[];let acc=0;const hist=live.map(d=>{acc+=d.net;return acc});const base=p_nw();
-const vals=hist.map((h,i)=>base-(hist[hist.length-1]-h));const lo=Math.min(...vals),hi=Math.max(...vals);const sp2=(hi-lo)||1;
-if(vals.length<2)return'';
-const W=300,H=110,pd=10;const xy=i=>[pd+i*(W-2*pd)/(vals.length-1),H-pd-((vals[i]-lo)/sp2)*(H-2*pd)];
-const path=vals.map((_,i)=>xy(i)).map(([x,yy],i)=>(i?'L':'M')+x.toFixed(1)+' '+yy.toFixed(1)).join(' ');
-const area=`${path} L ${(W-pd).toFixed(1)} ${H-pd} L ${pd} ${H-pd} Z`;
-return`<div style="border-top:1px solid var(--line);padding:10px 12px 0"><div class="muted" style="font-size:12px;margin-bottom:2px">Net worth over time</div>
-<svg class="nw" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${area}" fill="var(--mvS)"/><path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/></svg>
-<div class="l" style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);padding:0 0 8px"><span>${mlabel(live[0].k).split(' ')[0]} ${money(vals[0],0,c2)}</span><span>now ${money(vals[vals.length-1],0,c2)}</span></div></div>`})()}
-<div style="border-top:1px solid var(--line)">${[...live].reverse().map(d=>`<div class="mrow" data-jump="${d.k}"><div class="top"><span>${mlabel(d.k).split(' ')[0]}</span><span class="num" style="color:${d.net>=0?'var(--in)':'var(--out)'}">${f2(d.net)}</span></div><div class="sub num">−${f2(d.sp)} spent · +${f2(d.in)} in</div></div>`).join('')}</div></div>`})()}
+${ALL?'<div class="muted" style="font-size:11px;margin:16px 4px 0">Expected amounts are set per currency — switch to a single currency to see them against your spending.</div>':''}
+${(()=>{if(ALL)return'';const bud=budgetFor(m,c),act=catSpend(m,c);
+const keys=[...new Set([...Object.keys(bud),...Object.keys(act)])].filter(k=>bud[k]>0||act[k]>0).sort((x,z)=>(act[z]||0)-(act[x]||0)||(+bud[z]||0)-(+bud[x]||0));
+const tExp=Object.values(bud).reduce((s2,v)=>s2+(+v||0),0),tAct=Object.values(act).reduce((s2,v)=>s2+v,0);
+const scoped=!!((D.budgets||{})[c]||{})[m];
+if(!keys.length)return`<div class="sec">Categories<span class="r"><button class="link" id="setBud">Set expected amounts</button></span></div><div class="card"><div class="empty" style="padding:24px 0;font-size:13px">No spending in ${mlabel(m).split(' ')[0]} yet.</div></div>`;
+const row=k=>{const a2=act[k]||0,e=+(bud[k]||0);const over=e>0&&a2>e;const col=e>0?(over?'var(--out)':'var(--in)'):'var(--ink3)';
+return`<div class="brow" data-cat="${esc(k)}" style="cursor:pointer"><div class="l"><span>${esc(k)} <span class="muted" style="font-size:11px">›</span></span><span class="num"><b style="color:${over?'var(--out)':'var(--ink)'}">${money(a2,0,c)}</b></span></div>
+<div class="track"><i style="width:${e>0?pct(a2,e):(tAct?Math.round(a2/tAct*100):0)}%;background:${col}"></i></div>
+<div class="muted num" style="font-size:11px;margin-top:4px">${e>0?`of ${money(e,0,c)} · ${over?money(a2-e,0,c)+' over':money(e-a2,0,c)+' left'}`:'no expected amount set'}${tAct?` · ${Math.round(a2/tAct*100)}% of spending`:''}</div></div>`};
+return`<div class="sec">Categories<span class="r"><button class="link" id="setBud">${tExp?'Edit expected':'Set expected amounts'}</button></span></div>
+<div class="card">${tExp?`<div class="brow" style="background:var(--bg)"><div class="l"><span><b>All categories</b>${scoped?' <span class="muted" style="font-size:11px">(this month)</span>':''}</span><span class="num"><b style="color:${tAct>tExp?'var(--out)':'var(--ink)'}">${money(tAct,0,c)}</b> of ${money(tExp,0,c)}</span></div><div class="track"><i style="width:${pct(tAct,tExp)}%;background:${tAct>tExp?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${tAct>tExp?money(tAct-tExp,0,c)+' over budget':money(tExp-tAct,0,c)+' left this month'}</div></div>`:''}
+${keys.map(row).join('')}</div>`})()}
 ${(()=>{const rng=R.catRange==='all'?'all':String(y);const cs=catSpendRange(rng,c,ALL);const tot=Object.values(cs).reduce((a,b)=>a+b,0);const nM=Math.max(1,monthsWithData(rng,c));
 const prevCs=R.catRange==='all'?null:catSpendRange(String(y-1),c,ALL);const hasPrev=prevCs&&Object.keys(prevCs).length>0;
 const list=Object.entries(cs).sort((a,b)=>b[1]-a[1]);const top=list[0]?.[1]||1;
@@ -759,11 +733,11 @@ let detail='';if(open){const mm=(R.catRange==='all'?[...new Set(D.txns.filter(t=
 const vals=mm.map(x=>x.v);const hi=Math.max(...vals,1);const W=300,H=90,pd=8;
 const xy=i=>[pd+(vals.length===1?(W/2-pd):i*(W-2*pd)/(vals.length-1)),H-pd-(vals[i]/hi)*(H-2*pd)];
 const pth=vals.map((_,i)=>xy(i)).map(([x,yy],i)=>(i?'L':'M')+x.toFixed(1)+' '+yy.toFixed(1)).join(' ');
-detail=`${vals.length>1?`<svg class="nw" style="height:90px" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${pth} L ${(W-pd).toFixed(1)} ${H-pd} L ${pd} ${H-pd} Z" fill="var(--outS)"/><path d="${pth}" fill="none" stroke="var(--out)" stroke-width="2" stroke-linejoin="round"/></svg><div class="ylab">${mm.map(x=>`<span>${R.catRange==='all'?x.k.slice(2).replace('-','/'):'JFMAMJJASOND'[+x.k.slice(5)-1]}</span>`).join('')}</div>`:''}
-<div class="muted num" style="font-size:11px;padding:0 16px 6px">${mm.filter(x=>x.v>0).map(x=>`${mlabel(x.k).split(' ')[0].slice(0,3)} ${money(x.v,0,c)}`).join(' · ')}</div>
+detail=`${vals.filter(v=>v>0).length>1?`<svg class="nw" style="height:90px" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${pth} L ${(W-pd).toFixed(1)} ${H-pd} L ${pd} ${H-pd} Z" fill="var(--outS)"/><path d="${pth}" fill="none" stroke="var(--out)" stroke-width="2" stroke-linejoin="round"/></svg><div class="ylab">${mm.map(x=>`<span>${R.catRange==='all'?x.k.slice(2).replace('-','/'):'JFMAMJJASOND'[+x.k.slice(5)-1]}</span>`).join('')}</div>`:''}
+<div class="muted num" style="font-size:11px;padding:0 16px 6px">${mm.filter(x=>x.v>0).map(x=>`${mlabel(x.k).split(' ')[0].slice(0,3)} ${money(x.v,0,c)}`).join(' · ')}${mm.filter(x=>x.v>0).length<2?' — a trend line appears once there are two months.':''}</div>
 <div style="padding:0 16px 12px"><button class="link" data-catall="${esc(k)}">See all ${esc(k)} transactions ›</button></div>`}
 return`<div class="brow" style="padding:0"><div data-catrow="${esc(k)}" style="padding:11px 16px;cursor:pointer"><div class="l"><span>${esc(k)} <span class="muted" style="font-size:11px">${open?'▾':'›'}</span></span><span class="num"><b>${money(v,0,c)}</b> <span class="muted" style="font-size:12px">${tot?Math.round(v/tot*100):0}%</span></span></div><div class="track"><i style="width:${Math.round(v/top*100)}%;background:var(--out)"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(v/nM,0,c)} avg per month${ch!=null?` · <span style="color:${ch>0?'var(--out)':'var(--in)'}">${ch>0?'+':''}${ch}% vs ${y-1}</span>`:hasPrev&&pv===0?' · new this year':''}</div></div>${detail}</div>`}).join('');
-return`<div class="sec">Spending by category<span class="r"><span class="seg" style="display:inline-grid;grid-template-columns:1fr 1fr;margin:0;padding:2px;vertical-align:middle"><button data-catrange="year" class="${R.catRange==='year'?'on':''}" style="padding:4px 10px;font-size:12px">${y}</button><button data-catrange="all" class="${R.catRange==='all'?'on':''}" style="padding:4px 10px;font-size:12px">All time</button></span></span></div>
+return`<div class="sec">Category trends<span class="r"><span class="seg" style="display:inline-grid;grid-template-columns:1fr 1fr;margin:0;padding:2px;vertical-align:middle"><button data-catrange="year" class="${R.catRange==='year'?'on':''}" style="padding:4px 10px;font-size:12px">${y}</button><button data-catrange="all" class="${R.catRange==='all'?'on':''}" style="padding:4px 10px;font-size:12px">All time</button></span></span></div>
 <div class="card">${list.length?`<div class="brow" style="background:var(--bg)"><div class="l"><span><b>Total</b> <span class="muted">across ${nM} month${nM>1?'s':''}</span></span><span class="num"><b>${money(tot,0,c)}</b></span></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(tot/nM,0,c)} avg per month</div></div>${rows}`:`<div class="empty" style="padding:28px 0">No spending recorded ${R.catRange==='all'?'yet':'in '+y}.</div>`}</div>
 `})()}
 ${years.length>1?`<div class="sec">All years</div><div class="card"><table class="tbl">${years.map(yy=>`<tr data-year="${yy}" style="cursor:pointer"><td>${yy}</td><td class="num out">−${money(spentIn(yy,c),0,c)}</td><td class="num in">+${money(inflowIn(yy,c),0,c)}</td><td class="num">${money(inflowIn(yy,c)-spentIn(yy,c)-sentIn(yy,c),0,c)}</td></tr>`).join('')}</table></div>`:''}
@@ -772,14 +746,14 @@ ${years.length>1?`<div class="sec">All years</div><div class="card"><table class
 function wireReports(v){v.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=>{R.month=shiftMonth(R.month,+b.dataset.mo);render()});
 v.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{R.month=b.dataset.jump;render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{R.month=b.dataset.year+R.month.slice(4);render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
-v.querySelector('#allFx')?.addEventListener('click',openWealth);
+v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
+v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelector('#chartMode')?.addEventListener('click',()=>{R.chartMode=(R.chartMode||'flow')==='flow'?'cat':'flow';render()});
 v.querySelector('#chartSpan')?.addEventListener('click',()=>{R.chartAll=!R.chartAll;render()});
 v.querySelectorAll('[data-catrange]').forEach(b=>b.onclick=()=>{R.catRange=b.dataset.catrange;render()});
 v.querySelectorAll('[data-catrow]').forEach(b=>b.onclick=()=>{R.catOpen=R.catOpen===b.dataset.catrow?null:b.dataset.catrow;render()});
 v.querySelectorAll('[data-catjump]').forEach(b=>b.onclick=e=>{e.stopPropagation();F={q:'',acct:'all',type:'expense',cat:b.dataset.catname,month:b.dataset.catjump,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:R.cur,year:R.catRange==='all'?null:String(R.year)};tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
 v.querySelector('#pickMonth')?.addEventListener('click',openMonthPicker);
 v.querySelector('#setBud')?.addEventListener('click',openBudget);v.querySelector('#openGoals')?.addEventListener('click',openGoals);v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)))}
 
@@ -1052,8 +1026,8 @@ let usdOz=null,source='';for(const[n,fn]of srcs){try{const v=await fn();if(v>0){
 if(!usdOz)throw new Error('no source');
 let fx=1;if(c==='INR'){fx=await fetchFx('USD','INR')}
 const g24=usdOz*fx/31.1035;const perGram={};Object.entries(PURITY).forEach(([k,v])=>perGram[k]=g24*v.f);return{perGram,source}}
-async function fetchFx(a,b){const urls=[`https://api.frankfurter.app/latest?from=${a}&to=${b}`,`https://open.er-api.com/v6/latest/${a}`];
-for(const u of urls){try{const r=await fetch(u);const j=await r.json();const v=(j.rates&&j.rates[b])||null;if(v>0)return v}catch(e){}}throw new Error('no fx')}
+async function fetchFx(a,b){const srcs=[['frankfurter.app',`https://api.frankfurter.app/latest?from=${a}&to=${b}`],['open.er-api.com',`https://open.er-api.com/v6/latest/${a}`]];
+for(const [name,u] of srcs){try{const r=await fetch(u);const j=await r.json();const v=(j.rates&&j.rates[b])||null;if(v>0){fetchFx.src=name;return v}}catch(e){}}throw new Error('no fx')}
 
 // ---------- credit card cycles ----------
 const isCard=a=>a&&a.type==='credit';
@@ -1393,6 +1367,33 @@ document.querySelectorAll('[data-atog]').forEach(el=>el.onclick=()=>{const id=el
 const i=D.settings.wExclude.indexOf(id);if(i>=0)D.settings.wExclude.splice(i,1);else D.settings.wExclude.push(id);
 localStorage.setItem(KEY,JSON.stringify(D));openAssets()});
 document.getElementById('cancel').onclick=()=>openWealth()}};renderSheet()}
+function openRateSheet(){const lt=lastTransferFx();let busy=false,msg='';
+sheet={title:'Exchange rate',body(){const mode=fxSource();const used=fxRate();
+const when=D.settings.fxAtTime?new Date(D.settings.fxAtTime):null;
+const gap=(lt&&D.settings.fxLive)?Math.abs(lt-D.settings.fxLive)/D.settings.fxLive*100:null;
+return`<div class="kpi" style="grid-template-columns:1fr;margin:0 0 12px"><div class="stat"><span>Rate in use</span><b class="num" style="font-size:26px">₹${used}</b><i>per US dollar · ${mode==='manual'?'you set it':mode==='live'?'market rate':'your last transfer'}</i></div></div>
+<div class="seg" style="grid-template-columns:repeat(3,1fr)">${[['transfer','My last transfer'],['live','Live market'],['manual','I set it']].map(([v,l])=>`<button data-fxm="${v}" class="${mode===v?'on':''}" style="font-size:11px;padding:9px 0">${l}</button>`).join('')}</div>
+<div class="card" style="padding:12px 14px;margin-top:12px">
+<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span>Your last transfer</span><span class="num">${lt?'₹'+lt:'—'}</span></div>
+${lt?`<div class="muted" style="font-size:11px;margin:-2px 0 6px">What you actually converted at, fees included.</div>`:''}
+<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-top:1px solid var(--line)"><span>Market rate</span><span class="num">${D.settings.fxLive?'₹'+D.settings.fxLive:'—'}</span></div>
+<div class="muted" style="font-size:11px;margin-top:2px;line-height:1.45">${D.settings.fxLive?`From ${esc(D.settings.fxSrc||'a public rate service')}${when?', '+dlabel(D.settings.fxLiveAt,1)+' at '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}. Refreshes itself once a day — worth spot-checking against Google now and then.`:'Not fetched yet.'}</div>
+${gap!=null?`<div class="note ${gap>5?'out':'mv'}" style="margin:10px 0 0;font-size:12px">${gap>5?`These differ by ${gap.toFixed(1)}% — worth checking which is right before trusting converted figures.`:`The two agree within ${gap.toFixed(1)}%, so the market figure looks sound.`}</div>`:''}
+${D.settings.fxErr&&D.settings.fxErr===today()?`<div class="note out" style="margin:10px 0 0;font-size:12px">Couldn't reach the rate service today — still using the figure above.</div>`:''}
+<button class="btn" id="rsFetch" style="margin-top:10px"${busy?' disabled':''}>${busy?'Fetching…':'Refresh market rate now'}</button>
+${msg?`<div class="muted" style="font-size:11px;margin-top:8px">${esc(msg)}</div>`:''}</div>
+${mode==='manual'?`<label class="field" style="margin-top:12px"><div>Your rate (₹ per $)</div><input id="rsMan" class="num" inputmode="decimal" value="${D.settings.fx||used}"></label>`:''}
+<div class="muted" style="font-size:11px;margin-top:12px;line-height:1.45">This rate converts your dollar accounts wherever the app shows a combined figure — the All view in Reports, your wealth target, and net worth. Single-currency views never convert anything.</div>`},
+wire(){const $=id=>document.getElementById(id);
+document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{D.settings.fxMode=b.dataset.fxm;msg='';save();openRateSheet()});
+$('rsMan')&&($('rsMan').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){D.settings.fx=v;D.settings.fxMode='manual';save();openRateSheet()}});
+$('rsFetch').onclick=async()=>{busy=true;msg='';renderSheet();
+try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();D.settings.fxSrc=fetchFx.src||'';D.settings.fxAtTime=new Date().toISOString();delete D.settings.fxErr;msg=`Updated to ₹${D.settings.fxLive} from ${D.settings.fxSrc}.`}
+catch(e){D.settings.fxErr=today();msg="Couldn't reach a rate service. Your existing rate is unchanged."}
+busy=false;save();renderSheet()};
+document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
+const rateLine=(ctx)=>{const mode=fxSource();const age=daysSince(D.settings.fxLiveAt);
+return`<div class="muted" style="font-size:11px;margin:8px 4px 0;line-height:1.45">${ctx} converted at <b>₹${fxRate()}</b> per $ · ${mode==='manual'?'rate you set':mode==='live'?`market${D.settings.fxLive?', '+(age===0?'today':age+'d old'):''}`:'your last transfer'} <button class="link" id="rateOpen" style="font-size:11px">Change ›</button></div>`};
 function openWealth(){const st=D.settings;
 sheet={title:'Wealth target',body(){const target=+(st.wTarget||0);
 if(!target)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Name an amount and the app works out the date, using what you actually earn and spend — not estimates. Everything is converted to rupees at the rate below.</div>
@@ -1446,7 +1447,10 @@ const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)&&ms.includes(mk(t.date
 if(!oo.length)return`<div class="card" style="padding:11px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span class="muted">No one-offs marked — big rare costs will be treated as monthly</span><button class="link" id="ooHelp" style="font-size:13px">How ›</button></div></div>`;
 const byC={};oo.forEach(t=>{const c=cur(acct(t.accountId));byC[c]=(byC[c]||0)+t.amount});
 return`<div class="card" style="padding:11px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span class="muted">${oo.length} one-off${oo.length===1?'':'s'} excluded · ${Object.entries(byC).map(([c,v])=>money(v,0,c)).join(' · ')}</span><button class="link" id="ooReview" style="font-size:13px">Review ›</button></div></div>`})()}
-${(()=>{const fs2=flexSplit(+(st.wWin||6));const tot=fs2.fixed+fs2.nec+fs2.disc;if(tot<=0)return'';
+${(()=>{const fs9=flexSplit(+(st.wWin||6));const op=st.wAdvice===true;
+if(fs9.fixed+fs9.nec+fs9.disc<=0&&!cutIdeas(+(st.wWin||6)).length)return'';
+return`<div class="card" style="padding:12px 14px;margin-bottom:12px" id="advToggle"><div class="l" style="display:flex;justify-content:space-between;align-items:center;font-size:14px;cursor:pointer"><span><b>What can I change?</b> <span class="muted" style="font-size:11px">${op?'▾':'›'}</span></span><span class="num muted" style="font-size:12px">${fs9.ceiling>0?f(fs9.ceiling)+'/mo':''}</span></div>${op?'':'<div class="muted" style="font-size:11px;margin-top:4px">Your fixed costs, what is flexible, and where to trim.</div>'}</div>`})()}
+${st.wAdvice===true?`${(()=>{const fs2=flexSplit(+(st.wWin||6));const tot=fs2.fixed+fs2.nec+fs2.disc;if(tot<=0)return'';
 const subs=optionalRecurring();const subTot=subs.reduce((a,x)=>a+x.base,0);
 const bar=(v,col)=>`<div style="height:100%;width:${tot?Math.max(0,v/tot*100):0}%;background:${col}"></div>`;
 return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">Your monthly floor and slack</div>
@@ -1467,18 +1471,8 @@ ${ideas.length?`<div class="card">${ideas.map((i,n)=>`<div class="brow"><div cla
 <div class="muted num" style="font-size:11px;margin-top:2px">Trimming ${money(i.save,0,i.c)}/month → ${(()=>{const e=+(st.wExtra||0)+toINR(i.save,i.c);const q=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:e});return p.hit!=null&&q.hit!=null?`${dur(p.hit-q.hit)} sooner`:'helps'})()}</div>
 <div class="tools" style="margin-top:8px">${(()=>{const key=i.c+'|'+i.cat;const on=(st.wCuts||[]).some(x=>x.k===key);return`<button class="btn" data-cutk="${esc(key)}" data-cutv="${toBase(i.save,i.c).toFixed(2)}" style="width:auto;font-size:12px;padding:7px 12px;${on?'background:var(--mvS);color:var(--mv)':''}">${on?'✓ Counted in my extra':'Add to my extra'}</button>`})()}</div></div>`).join('')}</div>`
 :'<div class="empty" style="padding:18px 0;font-size:13px">No spending recorded to suggest cuts from yet.</div>'}
-<div class="card" style="padding:12px 14px;margin-top:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">Exchange rate · ₹${p.fx} per $</div>
-<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['transfer','My last transfer'],['live','Live market'],['manual','I set it']].map(([v,l])=>`<button data-fxm="${v}" class="${fxSource()===v?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div>
-<div class="muted num" style="font-size:11px;margin-top:8px">${lastTransferFx()?`Your last transfer: ₹${lastTransferFx()}`:'No India transfer recorded yet'}${D.settings.fxLive?` · market ₹${D.settings.fxLive}`:''}</div>
-${(()=>{const age=fxStale();const err=D.settings.fxErr;
-if(!D.settings.fxLive&&!err)return'';
-if(err&&err===today()&&age>=1)return`<div class="note out" style="margin:8px 0 0;font-size:11px">Couldn't update the rate — still using ₹${D.settings.fxLive||fxRate()}${D.settings.fxLiveAt?' from '+dlabel(D.settings.fxLiveAt,1):''}. <button class="link" id="fxRetry" style="font-size:11px">Retry</button></div>`;
-if(age>=7)return`<div class="note out" style="margin:8px 0 0;font-size:11px">Market rate is ${age} days old. <button class="link" id="fxRetry" style="font-size:11px">Update now</button></div>`;
-return`<div class="muted" style="font-size:11px;margin-top:4px">Market rate updated ${age===0?'today':dlabel(D.settings.fxLiveAt,1)} · refreshes itself daily</div>`})()}
-${fxSource()==='manual'?`<label class="field" style="margin:10px 0 0"><div>Your rate (₹ per $)</div><input id="wfx" class="num" inputmode="decimal" value="${D.settings.fx||p.fx}"></label>`:''}
-${fxSource()==='live'?`<button class="btn" id="wfxFetch" style="margin-top:10px"${st.fxBusy?' disabled':''}>${st.fxBusy?'Fetching…':"Fetch today's rate"}</button>`:''}
-${st.fxMsg?`<div class="muted" style="font-size:11px;margin-top:8px">${esc(st.fxMsg)}</div>`:''}
-<div class="muted" style="font-size:11px;margin-top:8px">Your transfer rate includes fees, so it's usually the truest figure for you. The market rate is for reference.</div></div>
+`:''}
+${currencies().length>1?rateLine('USD side'):''}
 <div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="width:auto">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
 wire(){const $=id=>document.getElementById(id);
 $('wtOk')&&($('wtOk').onclick=()=>{const v=parseFloat($('wt').value.replace(/[^0-9.]/g,''))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();openWealth()});
@@ -1492,6 +1486,8 @@ document.querySelectorAll('[data-cutk]').forEach(b=>b.onclick=()=>{st.wCuts=st.w
 const i=st.wCuts.findIndex(x=>x.k===k);if(i>=0){st.wCuts.splice(i,1);toast('Removed from your extra')}else{st.wCuts.push({k,v});toast('Counted in your extra')}
 save();openWealth()});
 $('pickAssets')&&($('pickAssets').onclick=openAssets);
+$('rateOpen')&&($('rateOpen').onclick=openRateSheet);
+$('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;save();openWealth()});
 $('manageRec')&&($('manageRec').onclick=()=>openRecurring());
 $('cardMode')&&($('cardMode').onclick=openCardModes);
 $('ooReview')&&($('ooReview').onclick=()=>{const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)).sort((a,b)=>b.date.localeCompare(a.date));
@@ -1515,7 +1511,7 @@ const daysSince=d=>d?Math.floor((new Date(today())-new Date(d))/864e5):999;
 const fxStale=()=>daysSince(D.settings.fxLiveAt);
 async function autoRates(){if(!navigator.onLine)return;
 // USD/INR once a day
-if(daysSince(D.settings.fxLiveAt)>=1){try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;localStorage.setItem(KEY,JSON.stringify(D))}
+if(daysSince(D.settings.fxLiveAt)>=1){try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();D.settings.fxSrc=fetchFx.src||'';D.settings.fxAtTime=new Date().toISOString();delete D.settings.fxErr;localStorage.setItem(KEY,JSON.stringify(D))}
 catch(e){D.settings.fxErr=today();localStorage.setItem(KEY,JSON.stringify(D))}}
 // gold once a day, per currency in use, keeping each account's local premium
 const golds=D.accounts.filter(a=>isInvest(a)&&a.kind==='gold'&&a.autoRate!==false);
@@ -1653,10 +1649,10 @@ if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
 
 // ---------- menu / appearance / pin ----------
 function openMenu(){
-const items=[['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud backup',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
+const items=[['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['rate','Exchange rate','How dollars convert to rupees'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud backup',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
 sheet={title:'Menu',body(){return`<div class="card menu">${items.map(([k,t,d])=>`<div class="row" data-mi="${k}"><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div><span class="muted">›</span></div>`).join('')}</div><div class="muted" style="text-align:center;margin-top:14px;font-size:12px">Ledger v${VERSION}</div>`},
 wire(){document.querySelectorAll('[data-mi]').forEach(el=>el.onclick=()=>{const k=el.dataset.mi;sheet=null;
-if(k==='wealth')openWealth();else if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
+if(k==='wealth')openWealth();else if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='rate')openRateSheet();else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
 function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.theme||'auto';return`<div class="field"><div>Theme</div><div class="seg" style="margin:0">${[['auto','Match phone'],['light','Light'],['dark','Dark']].map(([v,l])=>`<button data-th="${v}" class="${t===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="field"><div>Accent color</div><div class="sw">${ACCENTS.map(([c,n])=>`<button data-ac="${c}" title="${n}" class="${(D.settings.accent||'#2F4BC9')===c?'on':''}" style="background:${c}"></button>`).join('')}</div></div>
 <div class="muted" style="margin-bottom:16px">Used for transfers, the + button, links and charts.</div>
