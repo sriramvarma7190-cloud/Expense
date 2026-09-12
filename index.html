@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='8.2 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='8.3 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1140,6 +1140,15 @@ return{...out,emi:emi/n,byCat,ceiling,months:ms.length,useCur}}
 // optional recurring subscriptions (excluding loans/cards/fixed)
 function optionalRecurring(){return (D.recurring||[]).filter(r=>r.active!==false&&r.type==='expense'&&recFlex(r)!=='fixed')
 .map(r=>({r,base:toBase(r.amount,cur(acct(r.accountId))||'INR')}))}
+// ---------- card behaviour ----------
+function cardBehaviour(a){const cs=a.closeDay?cardState(a):null;const total=cs?cs.total:-(balances()[a.id]||0);
+// look back over recent cycles: did payments clear each statement?
+let carried=false;
+if(cs&&!cs.paidInFull&&cs.overdue)carried=true;
+if(a.carry===true)carried=true;if(a.carry===false)carried=false;
+const promo=promoOn(a);const apr=promo?0:+(a.apr||0);
+return{total,carried,apr,promo,promoUntil:a.promoUntil,due:cs?cs.due:null,remaining:cs?cs.remaining:total,paidInFull:cs?cs.paidInFull:false}}
+
 // ---------- wealth projection ----------
 const lastTransferFx=()=>{const t=[...D.txns].filter(x=>x.type==='transfer'&&x.toAmount>0&&cur(acct(x.accountId))==='USD'&&cur(acct(x.toAccountId))==='INR').sort((a,b)=>b.date.localeCompare(a.date))[0];return t?+(t.toAmount/t.amount).toFixed(2):null};
 const fxSource=()=>D.settings.fxMode||'transfer';
@@ -1196,23 +1205,51 @@ const opening=Math.max(0,-(a.opening||0));return{a,ch,pay,gap:pay-(ch+opening)}}
 function project(target,opt){opt=opt||{};const inc=opt.includeInvest!==false;const extra=+(opt.extra||0);
 const f=flowStats(opt.window||6);const w=wealthNow(inc);
 let liquid=w.liquid+w.dep+(inc?w.inv:0);
-const loans=D.accounts.filter(isLoan).map(a=>({a,bal:loanState(a).out,rate:(a.rate||0)/100,emi:a.emi||0,c:cur(a)}));
-let cards=D.accounts.filter(isCard).reduce((s,x)=>s+toBase(x.closeDay?cardState(x).total:-balances()[x.id],cur(x)),0);
-const save=f.surplus+extra;let m=0,debtFree=null,hit=null;const path=[];
-for(m=0;m<=600;m++){const debt=loans.reduce((s,l)=>s+toBase(Math.max(0,l.bal),l.c),0)+cards;
-const net=liquid-debt;
-if(m%12===0||m<2)path.push({m,liquid,debt,net});
-if(hit===null&&net>=target)hit=m;
-if(debtFree===null&&debt<=0.01)debtFree=m;
-if(hit!==null&&debtFree!==null)break;
-// advance one month
-let freed=0;
-loans.forEach(l=>{if(l.bal<=0){freed+=toBase(l.emi,l.c);return}
-const int=l.bal*l.rate/12;l.bal=Math.max(0,l.bal+int-l.emi);if(l.bal<=0)freed+=0});
-if(cards>0)cards=Math.max(0,cards-Math.min(cards,save>0?save*0.5:0));
-liquid+=save+freed;
-if(save<=0&&freed<=0&&hit===null&&m>360)break}
-return{...f,...w,save,hit,debtFree,path,target,fx:fxRate(),includeInvest:inc}}
+// loans: day-accurate, same maths as the loan page
+const loans=D.accounts.filter(isLoan).map(a=>{const L=loanState(a);
+return{c:cur(a),bal:L.principalOut,accr:L.accrued,rate:(a.rate||0)/100,basis:a.basis||365,emi:a.emi||0,stDay:a.stDay||1,emiDay:a.emiDay||a.stDay||1,alive:L.out>0.01}});
+// cards: only those actually carrying a balance are projected debt
+const cards=D.accounts.filter(isCard).map(a=>{const b=cardBehaviour(a);
+return{c:cur(a),bal:b.carried?b.total:0,revolving:b.carried,apr:b.apr/100,promoUntil:b.promoUntil,total:b.total}})
+.filter(x=>x.revolving&&x.bal>0);
+const clearedCards=D.accounts.filter(isCard).reduce((s,a)=>{const b=cardBehaviour(a);return s+(b.carried?0:toBase(b.total,cur(a)))},0);
+const save=f.surplus+extra;
+const debtNow=()=>loans.reduce((s,l)=>s+toBase(Math.max(0,l.bal+l.accr),l.c),0)+cards.reduce((s,x)=>s+toBase(Math.max(0,x.bal),x.c),0);
+let hit=null,debtFree=null;const path=[];const start=new Date(today()+'T00:00:00');
+let month=0,dayCursor=new Date(start);
+const netNow=()=>liquid-debtNow()-clearedCards;
+if(netNow()>=target)hit=0;
+if(debtNow()<=0.01)debtFree=0;
+path.push({m:0,liquid,debt:debtNow()+clearedCards,net:netNow()});
+for(month=1;month<=600;month++){
+  // advance one calendar month, day by day, for loans and revolving cards
+  const mEnd=new Date(dayCursor);mEnd.setMonth(mEnd.getMonth()+1);
+  for(let d=new Date(dayCursor);d<mEnd;d.setDate(d.getDate()+1)){
+    const day=d.getDate();const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();const iso=d.toISOString().slice(0,10);
+    loans.forEach(l=>{if(!l.alive)return;
+      if(day===Math.min(l.stDay,dim)){l.bal+=l.accr;l.accr=0}
+      if(day===Math.min(l.emiDay,dim)&&l.bal+l.accr>0){let amt=Math.min(l.emi,l.bal+l.accr);const ti=Math.min(l.accr,amt);l.accr-=ti;l.bal=Math.max(0,l.bal-(amt-ti));if(l.bal+l.accr<=0.01)l.alive=false}
+      l.accr+=Math.max(0,l.bal)*l.rate/l.basis});
+    cards.forEach(x=>{if(x.bal<=0)return;const promo=x.promoUntil&&x.promoUntil>=iso;
+      if(!promo&&x.apr>0)x.bal+=x.bal*x.apr/365});
+  }
+  dayCursor=mEnd;
+  // freed EMIs become surplus
+  const freed=loans.filter(l=>!l.alive).reduce((s,l)=>s+toBase(l.emi,l.c),0);
+  let pot=save+freed;
+  // clear revolving cards first — highest rate first
+  cards.sort((p,q)=>q.apr-p.apr).forEach(x=>{if(pot<=0||x.bal<=0)return;
+    const payBase=Math.min(pot,toBase(x.bal,x.c));x.bal-=(x.c===baseCur()?payBase:payBase/ (baseCur()==='INR'?fxRate():1/fxRate()));
+    if(x.bal<0)x.bal=0;pot-=payBase});
+  liquid+=Math.max(0,pot);
+  const dn=debtNow();
+  if(debtFree===null&&dn<=0.01)debtFree=month;
+  if(hit===null&&netNow()>=target)hit=month;
+  if(month%12===0||month<2)path.push({m:month,liquid,debt:dn+clearedCards,net:netNow()});
+  if(hit!==null&&debtFree!==null)break;
+  if(save+freed<=0&&hit===null&&month>360)break}
+return{...f,...w,save,hit,debtFree,path,target,fx:fxRate(),includeInvest:inc,
+cardsRevolving:cards.length,cardsCleared:clearedCards,loansLeft:loans.filter(l=>l.alive).length}}
 const mLabel=n=>n==null?null:mlabel(shiftMonth(mk(today()),n));
 const dur=n=>n==null?'—':(n<12?`${n} mo`:`${Math.floor(n/12)} yr${n%12?' '+(n%12)+' mo':''}`);
 // where to cut
@@ -1238,6 +1275,16 @@ ideas.push({cat:k,c,flex:fx,actual:v,budget:0,avg:0,overBudget:0,overAvg:0,save:
 return ideas.sort((x,y)=>toBase(y.save,y.c)-toBase(x.save,x.c)).slice(0,8)}
 
 // ---------- wealth goal UI ----------
+function openCardModes(){sheet={title:'How cards are treated',body(){const cs=D.accounts.filter(isCard);
+return`<div class="muted" style="line-height:1.45;margin-bottom:12px">A card you pay in full every month isn't debt — the balance is this month's spending waiting for the due date, and it's already inside your measured spending. A card you carry is real debt, so the projection pays it down before saving.</div>
+${cs.length?`<div class="card">${cs.map(a=>{const b=cardBehaviour(a);const mode=a.carry===true?'carry':a.carry===false?'full':'auto';
+return`<div class="brow"><div class="l"><span><b>${esc(a.name)}</b></span><span class="num ${b.total>0?'out':''}">${money(b.total,0,cur(a))}</span></div>
+<div class="muted" style="font-size:11px;margin:4px 0 8px">${b.promo?`0% until ${dlabel(b.promoUntil,1)}`:b.apr>0?`${b.apr}% APR`:'no APR set'}${b.due?` · due ${dlabel(b.due,1)}`:''}</div>
+<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['auto','Work it out'],['full','I pay in full'],['carry','I carry a balance']].map(([k,l])=>`<button data-cm="${a.id}|${k}" class="${mode===k?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div></div>`}).join('')}</div>`:'<div class="empty" style="padding:20px 0">No cards yet.</div>'}
+<div class="muted" style="font-size:11px;margin-top:12px">"Work it out" uses your statement: if the last one wasn't paid by its due date, it's treated as carried.</div>`},
+wire(){document.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.cm.split('|');const a=acct(id);
+if(m==='auto')delete a.carry;else a.carry=(m==='carry');localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
+document.getElementById('cancel').onclick=()=>openWealth()}};renderSheet()}
 function openAssets(){const assets=D.accounts.filter(a=>isInvest(a)&&!isDep(a));
 sheet={title:'What counts in the target',body(){const ex=D.settings.wExclude||[];const c=baseCur();
 const mode=D.settings.wInv===false?'cash':(D.settings.wMode==='custom'||ex.length?'custom':'all');
@@ -1302,7 +1349,8 @@ return rows?`<div style="border-top:1px solid var(--line);margin-top:8px;padding
 <div class="l" style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-top:12px"><span class="muted">What counts · <b style="color:var(--ink)">${st.wInv===false?'Cash & deposits':(((D.settings.wExclude||[]).length||D.settings.wMode==='custom')?'Custom':'Everything')}</b></span><button class="link" id="pickAssets" style="font-size:13px">Choose ›</button></div>
 <div class="muted" style="font-size:11px;margin-top:6px">Other way: ${alt.hit==null?'not reached at this pace':mLabel(alt.hit)}. Gold uses your saved rate; land uses the rate you set.</div></div>
 <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Debt-free</span><b>${p.debtFree==null?'—':mLabel(p.debtFree)}</b></div>
-<div class="muted" style="font-size:11px;margin-top:4px">${D.accounts.filter(isLoan).length?`Loan interest costs about ${f(D.accounts.filter(isLoan).reduce((s,a)=>s+toINR(loanState(a).daily*365,cur(a)),0))} a year at today's balance.`:'No loans recorded.'}</div></div>
+<div class="muted" style="font-size:11px;margin-top:4px">${D.accounts.filter(isLoan).length?`Loans run day by day at balance × rate ÷ ${(D.accounts.find(isLoan).basis||365)*100} — the same maths as the loan page. Interest costs about ${f(D.accounts.filter(isLoan).reduce((s,a)=>s+toBase(loanState(a).daily*365,cur(a)),0))} a year at today's balance.`:'No loans recorded.'}</div>
+${D.accounts.filter(isCard).length?`<div class="muted" style="font-size:11px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px">${p.cardsRevolving?`${p.cardsRevolving} card${p.cardsRevolving===1?'':'s'} carrying a balance — paid down from your surplus, highest rate first.`:`Cards you clear each month aren't treated as debt to pay off${p.cardsCleared>0?` (${f(p.cardsCleared)} owed now is already counted in your spending)`:''}.`} <button class="link" id="cardMode" style="font-size:11px">Change ›</button></div>`:''}</div>
 <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:6px">If I save more each month (₹)</div>
 <input id="wx" class="num" inputmode="decimal" value="${st.wExtra||''}" placeholder="5000">
 ${extraTotal>0?`<div class="note mv" style="background:var(--mvS);margin:10px 0 0">Extra <b class="num">${f(extraTotal)}/month</b>${cutSum>0?` = ${f(+st.wExtra||0)} you typed + ${(st.wCuts||[]).map(x=>`${f(x.v)} from ${esc(x.k.split('|')[1])}`).join(' + ')}`:''}.<br>Target moves to <b>${p.hit==null?'—':mLabel(p.hit)}</b>${(()=>{const base=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:0});return base.hit!=null&&p.hit!=null?` — ${dur(base.hit-p.hit)} sooner`:''})()}.${cutSum>0?' <span class="muted">Tap a green suggestion again to remove it.</span>':''}</div>`:''}</div>
@@ -1355,6 +1403,7 @@ const i=st.wCuts.findIndex(x=>x.k===k);if(i>=0){st.wCuts.splice(i,1);toast('Remo
 save();openWealth()});
 $('pickAssets')&&($('pickAssets').onclick=openAssets);
 $('manageRec')&&($('manageRec').onclick=()=>openRecurring());
+$('cardMode')&&($('cardMode').onclick=openCardModes);
 $('ooReview')&&($('ooReview').onclick=()=>{const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)).sort((a,b)=>b.date.localeCompare(a.date));
 if(oo.length){const c=cur(acct(oo[0].accountId));R.cur=c;localStorage.setItem('ledger-cur',c)}
 F={q:'',acct:'all',type:'expense',cat:null,month:null,cur:null,year:null,oneOff:true};sheet=null;tab='activity';render();window.scrollTo(0,0)});
