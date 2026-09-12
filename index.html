@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='6.1 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='6.2 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render()}
@@ -169,7 +169,29 @@ const DEF_CATS_INR={expense:['Family','Groceries','Health','Shopping','Travel','
 const migrateCats=()=>{if(D.cats&&(D.cats.expense||D.cats.income)){D.cats={USD:{expense:D.cats.expense,income:D.cats.income}};localStorage.setItem(KEY,JSON.stringify(D))}};
 const catsOf=(k,c='USD')=>{const l=D.cats&&D.cats[c]&&D.cats[c][k];return(l&&l.length)?l:(c==='INR'?DEF_CATS_INR:DEF_CATS)[k]};
 const TYPES={checking:'Checking',savings:'Savings',credit:'Credit card',cash:'Cash',held:'Held by a person',invest:'Investment',loan:'Loan'};
-const KINDS={gold:'Gold',fund:'Mutual fund / SIP',bond:'Bond / FD',stock:'Stock',ppf:'PPF / NPS',land:'Land / property'};
+const KINDS={gold:'Gold',fund:'Mutual fund / SIP',fd:'Fixed deposit',rd:'Recurring deposit',bond:'Bond',stock:'Stock',ppf:'PPF / NPS',land:'Land / property'};
+const isDep=a=>a&&(a.kind==='fd'||a.kind==='rd'||a.kind==='bond'||a.kind==='ppf');
+const FREQ={12:'Monthly',4:'Quarterly',2:'Half-yearly',1:'Yearly',0:'At maturity'};
+const taxRate=()=>{const sl=+(D.settings.slab||0);return sl>0?sl*1.04/100:0};
+const netOf=g=>g*(1-(D.settings.afterTax?taxRate():0));
+const addMonths=(iso,n)=>{const d=new Date(iso+'T00:00:00');const day=d.getDate();d.setMonth(d.getMonth()+n);if(d.getDate()<day)d.setDate(0);return d.toISOString().slice(0,10)};
+const yearsBetween=(a,b)=>Math.max(0,(new Date(b)-new Date(a))/86400000/365);
+// deposit maths
+function depState(a,asOf){asOf=asOf||today();const r=(a.rate||0)/100;const start=a.since||today();const n=+(a.comp??4);const payout=+(a.payout??0);
+const term=+(a.termMonths||0);const maturity=term?addMonths(start,term):null;const endCalc=(maturity&&maturity<asOf)?maturity:asOf;
+const grow=(P,from,to)=>{const t=yearsBetween(from,to);if(!(P>0))return 0;return n>0?P*Math.pow(1+r/n,n*t):P*(1+r*t)};
+let principal=0,value=0,matValue=0,paidOut=0,accrued=0;
+if(a.kind==='rd'){const m=+(a.monthly||0);const day=+(a.day||1);let k=0;let d=start;
+while(term&&k<term){const iso=addMonths(start,k);if(iso>endCalc)break;principal+=m;value+=grow(m,iso,endCalc);k++}
+let mv=0;for(let j=0;j<term;j++){const iso=addMonths(start,j);mv+=grow(m,iso,maturity||endCalc)}matValue=mv;
+accrued=value-principal}
+else{principal=+(a.principal||0);
+if(payout>0){value=principal;const per=principal*r/payout;const periods=Math.floor(yearsBetween(start,endCalc)*payout);paidOut=periods*per;
+const lastPay=addMonths(start,Math.round(periods*12/payout));accrued=principal*r*yearsBetween(lastPay,endCalc);
+matValue=principal}
+else{value=grow(principal,start,endCalc);matValue=maturity?grow(principal,start,maturity):value;accrued=value-principal}}
+const nextPay=payout>0?(()=>{const per=Math.round(12/payout);let d=addMonths(start,per);let g=0;while(d<=asOf&&g++<600)d=addMonths(d,per);return(!maturity||d<=maturity)?d:null})():null;
+return{principal,value,matValue,interest:matValue-principal,earned:value-principal+paidOut,paidOut,accrued,maturity,nextPay,perPayout:payout>0?principal*r/payout:0}}
 const AREA={sqft:'sq ft',sqyd:'sq yd',acre:'acre',cent:'cent',gunta:'gunta',sqm:'sq m'};
 const STATES=['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Delhi','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Puducherry','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Chandigarh','Jammu & Kashmir'];
 const PURITY={'24':{label:'24k',f:1},'22':{label:'22k',f:0.916},'18':{label:'18k',f:0.75}};
@@ -221,7 +243,7 @@ else if(t.accountId===a.id){h[key]=(h[key]||0)-(t.units||0);proceeds+=t.amount}}
 const units=Object.values(h).reduce((x,y)=>x+y,0);return{byPurity:h,units,cost,proceeds,net:cost-proceeds}}
 function rateOf(a,purity){const r=(a.rates||{});return purity&&a.kind==='gold'?(r[purity]??(r['24']!=null?r['24']*PURITY[purity].f:null)):(r.unit??null)}
 function investValue(a){if(isLand(a)){const r=+(a.rates?.unit||0);const ar=+(a.area||0);if(!(r>0&&ar>0))return null;let v=ar*r;if(a.apprPct>0&&a.rateAt){const yrs=(new Date(today())-new Date(a.rateAt))/31557600000;v*=Math.pow(1+a.apprPct/100,Math.max(0,yrs))}return v}
-if(a.kind==='bond'||a.kind==='ppf'){const h=holdings(a);const days=h.cost>0?Math.max(0,(new Date(today())-new Date(a.since||today()))/864e5):0;return h.net*(1+((a.rate||0)/100)*(days/365))}
+if(isDep(a)||a.kind==='fd'||a.kind==='rd'){const st=depState(a);return st.value}
 const h=holdings(a);if(a.kind==='gold'){let v=0,any=false;Object.entries(h.byPurity).forEach(([k,g])=>{const r=rateOf(a,k==='-'?'24':k);if(r!=null){v+=g*r;any=true}});return any?v:null}
 const r=rateOf(a);return r!=null?h.units*r:null}
 // ---- loan maths: daily interest = out * rate / 36500, posted on statement day ----
@@ -331,8 +353,10 @@ v.querySelectorAll('[data-acct]').forEach(el=>el.onclick=()=>{const a=acct(el.da
 v.querySelectorAll('[data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
 v.querySelector('#addAcct')?.addEventListener('click',()=>openAccount());
 v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)));
-v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.post.split('|');if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name,split:!!r.who,who:r.who||[]},()=>{r.posted=r.posted||[];r.posted.push(m)})});
-v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
+v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.post.split('|');if(id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));const r2=dueRecurring().find(x=>x.r.id===id);if(!r2)return;openTxn(null,{type:'transfer',amount:r2.r.amount,date:r2.date,accountId:r2.r.accountId,toAccountId:r2.r.toAccountId,note:r2.r.name});return}
+if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name,split:!!r.who,who:r.who||[]},()=>{r.posted=r.posted||[];r.posted.push(m)})});
+v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast('Hidden for '+mlabel(m).split(' ')[0]);return}
+if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
 const q=v.querySelector('#q');if(q){q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
 v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
 v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render()});
@@ -352,18 +376,25 @@ el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip">
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')closeSheet()};
 document.getElementById('cancel').onclick=closeSheet;sheet.wire()}
 
-function openAccount(edit,isNew){if(isNew||edit&&!edit.id){const pre=edit||{};edit=null;var PRE=pre}const P=typeof PRE!=='undefined'?PRE:{};const st={name:edit?.name||'',bank:edit?.bank||'',type:edit?.type||P.type||'checking',currency:edit?.currency||P.currency||'USD',logoUrl:edit?.logoUrl||'',opening:edit?String(Math.abs(edit.opening||0)):'',bankSays:'',kind:edit?.kind||P.kind||'gold',rate:edit?.rate!=null?String(edit.rate):'',principal:edit?.principal!=null?String(edit.principal):'',emi:edit?.emi!=null&&edit.emi?String(edit.emi):'',months:edit?.months?String(edit.months):'',emiDay:edit?.emiDay||0,stDay:edit?.stDay||P.stDay||1,basis:edit?.basis||365,since:edit?.since||today(),showDue:edit?.showDue!==false,init:JSON.parse(JSON.stringify(edit?.init||{byPurity:{}})),rates:JSON.parse(JSON.stringify(edit?.rates||{})),rateAt:edit?.rateAt||'',busy:false,fmsg:'',show18:false,state:edit?.state||'',priceUnit:edit?.priceUnit||'10g',cal:edit?.cal||null,calIn:'',area:edit?.area??'',areaUnit:edit?.areaUnit||'sqft',pin:edit?.pin||'',apprPct:edit?.apprPct??''};
+function openAccount(edit,isNew){if(isNew||edit&&!edit.id){const pre=edit||{};edit=null;var PRE=pre}const P=typeof PRE!=='undefined'?PRE:{};const st={name:edit?.name||'',bank:edit?.bank||'',type:edit?.type||P.type||'checking',currency:edit?.currency||P.currency||'USD',logoUrl:edit?.logoUrl||'',opening:edit?String(Math.abs(edit.opening||0)):'',bankSays:'',kind:edit?.kind||P.kind||'gold',rate:edit?.rate!=null?String(edit.rate):'',principal:edit?.principal!=null?String(edit.principal):'',emi:edit?.emi!=null&&edit.emi?String(edit.emi):'',months:edit?.months?String(edit.months):'',emiDay:edit?.emiDay||0,stDay:edit?.stDay||P.stDay||1,basis:edit?.basis||365,since:edit?.since||today(),showDue:edit?.showDue!==false,init:JSON.parse(JSON.stringify(edit?.init||{byPurity:{}})),rates:JSON.parse(JSON.stringify(edit?.rates||{})),rateAt:edit?.rateAt||'',busy:false,fmsg:'',show18:false,state:edit?.state||'',priceUnit:edit?.priceUnit||'10g',cal:edit?.cal||null,calIn:'',area:edit?.area??'',areaUnit:edit?.areaUnit||'sqft',pin:edit?.pin||'',apprPct:edit?.apprPct??'',monthly:edit?.monthly?String(edit.monthly):'',termMonths:edit?.termMonths?String(edit.termMonths):'',comp:edit?.comp??4,payout:edit?.payout??0,day:edit?.day||1};
 sheet={title:edit?'Edit account':'New account',body(){const cr=st.type==='credit';const b=edit?balances()[edit.id]:null;
 return`<label class="field"><div>Account name</div><input id="an" value="${esc(st.name)}" placeholder="Everyday checking"></label>
-<div style="display:flex;gap:12px;align-items:flex-start"><div style="padding-top:22px">${logoEl({bank:st.bank,name:st.name||'?',logoUrl:st.logoUrl,type:st.type,kind:st.kind},44)}</div><label class="field" style="flex:1"><div>${st.type==='held'?'Who holds it':st.type==='invest'?'Where it\'s kept <span class="muted">(optional)</span>':'Bank'}</div><input id="ab" value="${esc(st.bank)}" autocomplete="off" placeholder="${st.type==='held'?'Dad, Mom, partner…':st.type==='invest'?'Locker, home, broker…':'Start typing: HDFC, SBI, Chase…'}">${st.type!=='held'&&st.type!=='invest'?`<div id="bankSug" style="position:relative"></div>`:''}</label></div>
+<div style="display:flex;gap:12px;align-items:flex-start"><div style="padding-top:22px">${logoEl({bank:st.bank,name:st.name||'?',logoUrl:st.logoUrl,type:st.type,kind:st.kind},44)}</div><label class="field" style="flex:1"><div>${st.type==='held'?'Who holds it':st.type==='invest'?(isDep({kind:st.kind})?'Bank':st.kind==='fund'?'Fund house <span class="muted">(optional)</span>':'Where it\'s kept <span class="muted">(optional)</span>'):'Bank'}</div><input id="ab" value="${esc(st.bank)}" autocomplete="off" placeholder="${st.type==='held'?'Dad, Mom, partner…':st.type==='invest'&&!isDep({kind:st.kind})&&st.kind!=='fund'?'Locker, home, broker…':'Start typing: HDFC, SBI, Chase…'}">${st.type!=='held'&&(st.type!=='invest'||isDep({kind:st.kind})||st.kind==='fund')?`<div id="bankSug" style="position:relative"></div>`:''}</label></div>
 ${st.type!=='held'&&st.type!=='invest'?`<label class="field" style="margin-top:-4px"><div>Logo <span class="muted" style="font-size:11px">(optional — paste a direct image link ending in .png/.svg/.jpg, or the bank's website like hdfcbank.com)</span></div><input id="al" value="${esc(st.logoUrl||'')}" placeholder="Leave blank to use the automatic logo"></label>`:''}
 <div class="g2"><label class="field"><div>Type</div><select id="at">${Object.entries(TYPES).map(([k,l])=>`<option value="${k}"${st.type===k?' selected':''}>${l}</option>`).join('')}</select></label>
 <label class="field"><div>Currency</div><select id="ac">${Object.entries(CUR).map(([k,v])=>`<option value="${k}"${st.currency===k?' selected':''}>${k} ${v.sym} — ${v.name}</option>`).join('')}</select></label></div>
 ${st.type==='held'?'<div class="note mv" style="background:var(--mvS)">Money you gave someone to keep for you. It counts as your savings, and Reports shows how much sits with each person.</div>':''}
 ${st.type==='invest'?`<label class="field"><div>What kind</div><select id="ak">${Object.entries(KINDS).map(([k,l])=>`<option value="${k}"${st.kind===k?' selected':''}>${l}</option>`).join('')}</select></label>
-${st.kind==='bond'||st.kind==='ppf'?`<label class="field"><div>Interest rate (% per year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="7.1"></label><label class="field"><div>Interest counts from</div><input id="asn" type="date" value="${st.since}"></label>`
+${isDep({kind:st.kind})?(()=>{const rd=st.kind==='rd';const sd=depState({kind:st.kind,rate:parseFloat(st.rate)||0,principal:parseFloat(st.principal)||0,monthly:parseFloat(st.monthly)||0,since:st.since,termMonths:parseInt(st.termMonths)||0,comp:+st.comp,payout:+st.payout,day:st.day});
+return`<div class="g2">${rd?`<label class="field" style="margin:0"><div>Deposit each month (${CUR[st.currency].sym})</div><input id="amon" class="num" inputmode="decimal" value="${esc(st.monthly)}" placeholder="5000"></label><label class="field" style="margin:0"><div>On day</div><select id="aday">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${(+st.day||1)===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label>`
+:`<label class="field" style="margin:0"><div>Amount deposited (${CUR[st.currency].sym})</div><input id="apr" class="num" inputmode="decimal" value="${esc(st.principal)}" placeholder="100000"></label><label class="field" style="margin:0"><div>Rate (% a year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="7.1"></label>`}</div>
+${rd?`<label class="field"><div>Rate (% a year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="7.1"></label>`:''}
+<div class="g2"><label class="field" style="margin:0"><div>Started on</div><input id="asn" type="date" value="${st.since}"></label><label class="field" style="margin:0"><div>Tenure (months)</div><input id="aterm" class="num" inputmode="numeric" value="${esc(st.termMonths)}" placeholder="60"></label></div>
+<div class="g2"><label class="field" style="margin:0"><div>Interest paid</div><select id="apay">${Object.entries(FREQ).map(([k,l])=>`<option value="${k}"${(+st.payout)===+k?' selected':''}>${k==='0'?'At maturity':l}</option>`).join('')}</select></label><label class="field" style="margin:0"><div>Compounded</div><select id="acomp"${(+st.payout)>0?' disabled':''}>${[[4,'Quarterly'],[12,'Monthly'],[2,'Half-yearly'],[1,'Yearly'],[0,'Simple interest']].map(([k,l])=>`<option value="${k}"${(+st.comp)===k?' selected':''}>${l}</option>`).join('')}</select></label></div>
+${(+st.payout)>0?'<div class="muted" style="font-size:11px;margin:-6px 0 12px">Interest is paid out, so it doesn\'t compound. Each payout shows up in Due for you to confirm.</div>':''}
+${sd.matValue>0?`<div class="note mv" style="background:var(--mvS)">${rd?`${st.termMonths||0} deposits of ${money(parseFloat(st.monthly)||0,0,st.currency)}`:money(parseFloat(st.principal)||0,0,st.currency)} → matures <b class="num">${money((+st.payout)>0?sd.principal:sd.matValue,0,st.currency)}</b>${sd.maturity?` on ${dlabel(sd.maturity)}`:''}. Interest <b class="num">${money(sd.interest||(sd.perPayout*(+st.payout)*((parseInt(st.termMonths)||0)/12)),0,st.currency)}</b>${D.settings.afterTax&&taxRate()>0?` · after tax ${money(netOf(sd.interest||(sd.perPayout*(+st.payout)*((parseInt(st.termMonths)||0)/12))),0,st.currency)}`:''}.</div>`:''}`})()
 :(()=>{const g=st.kind==='gold';const sym=CUR[st.currency].sym;
-const held=st.kind==='land'?`<div class="g2"><label class="field" style="margin:0"><div>Area</div><input class="num" data-la="1" inputmode="decimal" value="${st.area??''}" placeholder="2400"></label><label class="field" style="margin:0"><div>Measured in</div><select id="lau">${Object.entries(AREA).map(([k,l])=>`<option value="${k}"${(st.areaUnit||'sqft')===k?' selected':''}>${l}</option>`).join('')}</select></label></div>
+const held=isDep({kind:st.kind})?'':st.kind==='land'?`<div class="g2"><label class="field" style="margin:0"><div>Area</div><input class="num" data-la="1" inputmode="decimal" value="${st.area??''}" placeholder="2400"></label><label class="field" style="margin:0"><div>Measured in</div><select id="lau">${Object.entries(AREA).map(([k,l])=>`<option value="${k}"${(st.areaUnit||'sqft')===k?' selected':''}>${l}</option>`).join('')}</select></label></div>
 <div class="g2"><label class="field" style="margin:0"><div>State</div><select id="gst">${['',...STATES].map(x=>`<option value="${esc(x)}"${(st.state||'')===x?' selected':''}>${x||'Not set'}</option>`).join('')}</select></label><label class="field" style="margin:0"><div>Pincode</div><input id="lpin" inputmode="numeric" value="${esc(st.pin||'')}" placeholder="520001"></label></div>
 <label class="field"><div>Bought on</div><input id="asn" type="date" value="${st.since}"></label>`:g?`<div class="g2">${['22','24'].map(k=>`<label class="field" style="margin:0"><div>${PURITY[k].label} grams</div><input class="num" data-ih="${k}" inputmode="decimal" value="${st.init.byPurity?.[k]??''}" placeholder="0.000"></label>`).join('')}</div>${st.init.byPurity?.['18']||st.show18?`<label class="field"><div>18k grams</div><input class="num" data-ih="18" inputmode="decimal" value="${st.init.byPurity?.['18']??''}" placeholder="0.000"></label>`:'<button class="link" id="add18" style="font-size:12px;margin-bottom:10px">+ add 18k</button>'}`
 :`<label class="field"><div>${unitLabel({kind:st.kind})||'Units'} you already hold</div><input class="num" data-iu="1" inputmode="decimal" value="${st.init.units??''}" placeholder="0.000"></label>`;
@@ -374,6 +405,7 @@ const cost=+st.init.cost||0;let val=0,any=false;
 if(st.kind==='land'){const ar=parseFloat(st.area)||0,r=+(st.rates?.unit||0);if(ar>0&&r>0){val=ar*r;any=true}}
 else if(g){['18','22','24'].forEach(k=>{const grams=+(st.init.byPurity?.[k]||0);const r=+(st.rates?.[k]||0);if(grams&&r){val+=grams*r;any=true}})}
 else{const u=+(st.init.units||0),r=+(st.rates?.unit||0);if(u&&r){val=u*r;any=true}}
+if(isDep({kind:st.kind}))return'';
 return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">What you hold right now — later purchases go in with the <b>Invest</b> option on +.</div>
 ${held}<label class="field"><div>Total invested so far (${sym})</div><input class="num" data-ic="1" inputmode="decimal" value="${st.init.cost??''}" placeholder="0.00"></label></div>
 <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">Today's ${g?'gold rate':'price'}${st.rateAt?` · set ${dlabel(st.rateAt)}`:''}</div>
@@ -417,7 +449,7 @@ $('bs')&&($('bs').oninput=e=>{st.bankSays=e.target.value.replace(/[^0-9.]/g,'');
 $('adj')&&($('adj').onclick=()=>{const b=balances()[edit.id];const cr=st.type==='credit';const shown=cr?-b:b;const diff=Math.round((parseFloat(st.bankSays)-shown)*100)/100;if(!diff)return;
 const more=diff>0;const type=cr?(more?'expense':'income'):(more?'income':'expense');
 D.txns.push({id:uid(),created:Date.now(),type,amount:Math.abs(diff),date:today(),accountId:edit.id,category:'Adjustment',note:'Balance correction to match bank'});sheet=null;save();toast('Adjustment added — balances now match')});
-const grab=()=>{['ao','ar','apr','aemi','amo'].forEach(k=>{if($(k))st[{ao:'opening',ar:'rate',apr:'principal',aemi:'emi',amo:'months'}[k]]=$(k).value});if($('ab'))st.bank=$('ab').value;if($('al'))st.logoUrl=$('al').value};
+const grab=()=>{['ao','ar','apr','aemi','amo','amon','aterm'].forEach(k=>{if($(k))st[{ao:'opening',ar:'rate',apr:'principal',aemi:'emi',amo:'months',amon:'monthly',aterm:'termMonths'}[k]]=$(k).value});if($('ab'))st.bank=$('ab').value;if($('al'))st.logoUrl=$('al').value};
 $('at').onchange=e=>{grab();st.type=e.target.value;renderSheet()};
 $('ak')&&($('ak').onchange=e=>{grab();st.kind=e.target.value;renderSheet()});
 $('ar')&&($('ar').oninput=e=>{st.rate=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.rate},$('ar').onchange=()=>{grab();renderSheet()});
@@ -437,6 +469,11 @@ $('gst')&&($('gst').onchange=e=>{grab();pull();st.state=e.target.value;renderShe
 $('gpu')&&($('gpu').onchange=e=>{grab();pull();st.priceUnit=e.target.value;renderSheet()});
 $('lau')&&($('lau').onchange=e=>{grab();pull();st.areaUnit=e.target.value;renderSheet()});
 $('lpin')&&($('lpin').oninput=e=>st.pin=e.target.value.replace(/[^0-9]/g,''));
+$('amon')&&($('amon').oninput=e=>{st.monthly=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.monthly},$('amon').onchange=()=>{grab();renderSheet()});
+$('aterm')&&($('aterm').oninput=e=>{st.termMonths=e.target.value.replace(/[^0-9]/g,'');e.target.value=st.termMonths},$('aterm').onchange=()=>{grab();renderSheet()});
+$('apay')&&($('apay').onchange=e=>{grab();st.payout=+e.target.value;renderSheet()});
+$('acomp')&&($('acomp').onchange=e=>{grab();st.comp=+e.target.value;renderSheet()});
+$('aday')&&($('aday').onchange=e=>st.day=+e.target.value);
 $('gcal')&&($('gcal').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'');st.calIn=e.target.value});
 $('calBtn')&&($('calBtn').onclick=async()=>{grab();pull();const local=parseFloat(st.calIn)/(st.priceUnit==='10g'?10:1);
 if(!(local>0)){st.fmsg='Type the 24k rate you see locally first.';return renderSheet()}
@@ -453,7 +490,7 @@ catch(e){st.fmsg="Couldn't reach a price service (offline, or it's blocked). Typ
 st.busy=false;renderSheet()});$('asdue')&&($('asdue').onchange=e=>st.showDue=e.target.checked);$('ac').onchange=e=>{st.currency=e.target.value;st.opening=$('ao').value;st.bank=$('ab').value;renderSheet()};$('ao')&&($('ao').oninput=e=>st.opening=e.target.value.replace(/[^0-9.]/g,''));
 $('settleBtn')&&($('settleBtn').onclick=()=>openPerson(edit));
 $('ok').onclick=()=>{if(!st.name.trim())return;const o=parseFloat(st.opening)||0;const a={id:edit?.id||uid(),name:st.name.trim(),bank:st.bank.trim(),type:st.type,currency:st.currency,logoUrl:st.logoUrl||undefined,opening:(st.type==='invest'||st.type==='loan')?0:(st.type==='credit'?-o:o)};
-if(st.type==='invest'){a.kind=st.kind;pull();a.rates=st.rates;a.rateAt=st.rateAt||undefined;a.init=st.init;a.state=st.state||undefined;a.priceUnit=st.priceUnit;a.cal=st.cal||undefined;if(st.kind==='land'){a.area=parseFloat(st.area)||0;a.areaUnit=st.areaUnit;a.pin=st.pin||undefined;a.apprPct=parseFloat(st.apprPct)||0;a.since=st.since;if(!a.rateAt&&a.rates?.unit)a.rateAt=today()}if(st.kind==='bond'||st.kind==='ppf'){a.rate=parseFloat(st.rate)||0;a.since=st.since}}
+if(st.type==='invest'){a.kind=st.kind;pull();a.rates=st.rates;a.rateAt=st.rateAt||undefined;a.init=st.init;a.state=st.state||undefined;a.priceUnit=st.priceUnit;a.cal=st.cal||undefined;if(st.kind==='land'){a.area=parseFloat(st.area)||0;a.areaUnit=st.areaUnit;a.pin=st.pin||undefined;a.apprPct=parseFloat(st.apprPct)||0;a.since=st.since;if(!a.rateAt&&a.rates?.unit)a.rateAt=today()}if(isDep({kind:st.kind})){a.rate=parseFloat(st.rate)||0;a.since=st.since;a.termMonths=parseInt(st.termMonths)||0;a.comp=+st.comp;a.payout=+st.payout;if(st.kind==='rd'){a.monthly=parseFloat(st.monthly)||0;a.day=+st.day}else a.principal=parseFloat(st.principal)||0}}
 if(st.type==='loan'){a.rate=parseFloat(st.rate)||0;a.principal=parseFloat(st.principal)||0;a.months=parseInt(st.months)||0;a.emi=parseFloat(st.emi)||(a.months?Math.round(emiFor(a.principal,a.rate,a.months)*100)/100:0);a.emiDay=st.emiDay||st.stDay;a.stDay=st.stDay;a.basis=st.basis;a.since=st.since;a.showDue=st.showDue}
 if(edit)D.accounts=D.accounts.map(x=>x.id===a.id?a:x);else D.accounts.push(a);sheet=null;save();toast(edit?'Account updated':'Account added')};
 $('del')&&($('del').onclick=()=>{if(!confirm('Remove this account and every transaction on it?'))return;D.accounts=D.accounts.filter(a=>a.id!==edit.id);D.txns=D.txns.filter(t=>t.accountId!==edit.id&&t.toAccountId!==edit.id);sheet=null;save();toast('Account removed')});
@@ -766,6 +803,17 @@ document.getElementById('cancel').onclick=()=>edit?openGoalDetail(edit):(sheet=n
 D.recurring=D.recurring||[];
 const dueDate=(r,m)=>{const[y,mo]=m.split('-').map(Number);const last=new Date(y,mo,0).getDate();return `${m}-${String(Math.min(r.day,last)).padStart(2,'0')}`};
 function dueRecurring(){const out=[];const now=mk(today());
+D.accounts.filter(a=>isInvest(a)&&a.kind==='rd'&&a.monthly>0&&a.showDue!==false).forEach(a=>{const m=now;if((a.skipDue||[]).includes(m))return;
+const st=depState(a);if(st.maturity&&st.maturity<today())return;
+const d=dueDate({day:a.day||1},m);const paid=D.txns.some(t=>t.type==='transfer'&&t.toAccountId===a.id&&mk(t.date)===m);
+const from=(D.accounts.find(x=>cur(x)===cur(a)&&['checking','savings'].includes(x.type))||{}).id;
+if(d<=today()&&!paid)out.push({r:{id:'rd:'+a.id,name:a.name+' deposit',type:'transfer',amount:a.monthly,accountId:from,toAccountId:a.id,posted:[]},m,date:d})});
+D.accounts.filter(a=>isDep(a)&&(a.payout||0)>0&&a.showDue!==false).forEach(a=>{const st=depState(a);if(!st.nextPay)return;
+const per=Math.round(12/a.payout);let d=addMonths(a.since,per);const guard=[];while(d<=today()&&guard.length<600){guard.push(d);d=addMonths(d,per)}
+const last=guard[guard.length-1];if(!last)return;const m=mk(last);if((a.skipDue||[]).includes(m))return;
+const got=D.txns.some(t=>t.type==='transfer'&&t.accountId===a.id&&mk(t.date)===m);
+const into=(D.accounts.find(x=>cur(x)===cur(a)&&['checking','savings'].includes(x.type))||{}).id;
+if(!got)out.push({r:{id:'pay:'+a.id,name:a.name+' interest',type:'transfer',amount:Math.round(st.perPayout*100)/100,accountId:a.id,toAccountId:into,posted:[]},m,date:last})});
 D.accounts.filter(a=>isLoan(a)&&a.showDue!==false&&a.emi>0).forEach(a=>{const m=now;if((a.skipDue||[]).includes(m))return;const d=dueDate({day:a.emiDay||a.stDay||1},m);const paid=D.txns.some(t=>t.type==='transfer'&&t.toAccountId===a.id&&mk(t.date)===m);
 if(d<=today()&&!paid)out.push({r:{id:'loan:'+a.id,name:a.name+' EMI',type:'transfer',amount:a.emi,accountId:(D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'))||{}).id,toAccountId:a.id,posted:[]},m,date:d,loan:true})});(D.recurring||[]).forEach(r=>{if(r.active===false||!acct(r.accountId))return;let m=r.start||now;let guard=0;while(m<=now&&guard++<120){const d=dueDate(r,m);if(d<=today()&&!(r.posted||[]).includes(m))out.push({r,m,date:d});m=shiftMonth(m,1)}});return out.sort((a,b)=>a.date.localeCompare(b.date))}
 function openRecurring(){const list=D.recurring||[];const tot={};list.filter(r=>r.active!==false&&r.type==='expense').forEach(r=>{const c=cur(acct(r.accountId));tot[c]=(tot[c]||0)+r.amount});
@@ -823,6 +871,7 @@ wire(){document.querySelectorAll('[data-ic]').forEach(bt=>bt.onclick=()=>{R.cur=
 document.querySelectorAll('#sheet [data-acct]').forEach(el=>el.onclick=()=>openInvestDetail(acct(el.dataset.acct)));
 document.getElementById('addInv').onclick=()=>openAccount({type:'invest',currency:c,kind:'gold'},true)}};renderSheet()}
 function openInvestDetail(a){const c=cur(a);let busy=false,msg='';
+if(isDep(a)){return openDepDetail(a)}
 sheet={title:a.name,body(){const h=holdings(a);const v=investValue(a);const pl=v==null?null:v-h.net;const f=x=>money(x,0,c);
 const txs=D.txns.filter(t=>t.accountId===a.id||t.toAccountId===a.id).sort((x,y)=>y.date.localeCompare(x.date));
 const rateRows=a.kind==='gold'?Object.keys(PURITY).filter(k=>(h.byPurity[k]||0)>0||a.rates?.[k]).map(k=>`<label class="field" style="margin:0"><div>${PURITY[k].label} rate per gram (${CUR[c].sym})</div><input class="num" data-rk="${k}" inputmode="decimal" value="${a.rates?.[k]??''}" placeholder="0.00"></label>`).join(''):(a.kind==='bond'||a.kind==='ppf'?'':`<label class="field" style="margin:0"><div>Price per ${unitLabel(a).replace(/s$/,'')||'unit'} today (${CUR[c].sym})</div><input class="num" data-rk="unit" inputmode="decimal" value="${a.rates?.unit??''}" placeholder="0.00"></label>`);
@@ -840,6 +889,24 @@ try{const r=await fetchGold(c);const ratio=a.cal?.ratio||1;a.rates=a.rates||{};O
 catch(e){msg="Couldn't fetch a rate (offline, or the price service is unavailable). Type it in instead."}
 busy=false;renderSheet()});
 $('editAcct').onclick=()=>openAccount(a);
+document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
+document.getElementById('cancel').onclick=()=>openInvest()}};renderSheet()}
+function openDepDetail(a){const c=cur(a);
+sheet={title:a.name,body(){const st=depState(a);const f=x=>money(x,0,c);const tr=taxRate();const gross=st.interest;const net=gross*(1-tr);
+const rows=D.txns.filter(t=>t.accountId===a.id||t.toAccountId===a.id).sort((x,y)=>y.date.localeCompare(x.date)).slice(0,10);
+const tds=gross>0&&c==='INR'?(st.interest/Math.max(1,(a.termMonths||12)/12)):0;
+return`<div class="kpi" style="grid-template-columns:1fr 1fr;margin:0 0 12px">
+<div class="stat"><span>Value today</span><b class="num">${f(st.value)}</b><i class="num">${a.kind==='rd'?`${f(st.principal)} deposited`:`${f(st.principal)} deposited`}</i></div>
+<div class="stat"><span>Interest so far</span><b class="num in">${f(st.earned)}</b><i>${(a.payout||0)>0?f(st.paidOut)+' paid out':'compounded '+(FREQ[a.comp]||'quarterly').toLowerCase()}</i></div>
+<div class="stat"><span>Matures</span><b class="num">${st.maturity?dlabel(st.maturity):'—'}</b><i>${a.termMonths?a.termMonths+' months at '+(a.rate||0)+'%':''}</i></div>
+<div class="stat"><span>Maturity value</span><b class="num">${f((a.payout||0)>0?st.principal:st.matValue)}</b><i class="num">${(a.payout||0)>0?f(st.perPayout)+' every payout':'interest '+f(gross)}</i></div></div>
+${gross>0?`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Interest over the full term</span><b class="num">${f(gross)}</b></div>
+${D.settings.slab?`<div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">After tax at your ${D.settings.slab}% slab${tr?' + 4% cess':''}</span><b class="num in">${f(net)}</b></div>`:'<div class="muted" style="font-size:12px;margin-top:6px">Set your tax slab in Menu › Appearance to see the after-tax figure.</div>'}
+${c==='INR'&&gross/Math.max(1,(a.termMonths||12)/12)>50000?`<div class="muted" style="font-size:11px;margin-top:8px">Yearly interest here is above ₹50,000, so the bank will deduct 10% TDS. That is tax paid early, not an extra cost — the full amount is taxable at your slab either way.</div>`:''}</div>`:''}
+${st.nextPay?`<div class="note mv" style="background:var(--mvS)">Next payout ${f(st.perPayout)} on ${dlabel(st.nextPay)} — it appears in Due to confirm.</div>`:''}
+${rows.length?`<div class="sec" style="margin-top:4px">History</div><div class="card">${rows.map(t=>txnRow(t,1)).join('')}</div>`:''}
+<button class="btn" id="editAcct" style="margin-top:14px">Edit ${KINDS[a.kind].toLowerCase()}</button>`},
+wire(){document.getElementById('editAcct').onclick=()=>openAccount(a);
 document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
 document.getElementById('cancel').onclick=()=>openInvest()}};renderSheet()}
 async function fetchGold(c){const srcs=[
@@ -951,9 +1018,12 @@ if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){
 function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.theme||'auto';return`<div class="field"><div>Theme</div><div class="seg" style="margin:0">${[['auto','Match phone'],['light','Light'],['dark','Dark']].map(([v,l])=>`<button data-th="${v}" class="${t===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="field"><div>Accent color</div><div class="sw">${ACCENTS.map(([c,n])=>`<button data-ac="${c}" title="${n}" class="${(D.settings.accent||'#2F4BC9')===c?'on':''}" style="background:${c}"></button>`).join('')}</div></div>
 <div class="muted" style="margin-bottom:16px">Used for transfers, the + button, links and charts.</div>
+<div class="field"><div>Income tax slab <span class="muted">(for after-tax figures)</span></div><select id="slab">${[['','Not set'],['5','5%'],['10','10%'],['15','15%'],['20','20%'],['25','25%'],['30','30%']].map(([v,l])=>`<option value="${v}"${String(D.settings.slab||'')===v?' selected':''}>${l}</option>`).join('')}</select><label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:14px"><input type="checkbox" id="atax" style="width:auto"${D.settings.afterTax?' checked':''}><span>Show interest after tax</span></label><div class="muted" style="font-size:11px;margin-top:6px">Adds the 4% cess automatically. TDS the bank deducts is tax paid early, not extra.</div></div>
 <div class="field"><div>Bank logos</div><div class="seg" style="margin:0;grid-template-columns:1fr 1fr">${[['mark','Brand mark'],['icon','Website icon']].map(([v,l])=>`<button data-ls="${v}" class="${(D.settings.logoStyle||'mark')===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="muted">Brand mark: clean white symbol on the bank's color. Website icon: the bank's own full-color app icon.</div>`},
-wire(){document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{D.settings.theme=b.dataset.th;applyTheme();save();openAppearance()});document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{D.settings.accent=b.dataset.ac;applyTheme();save();openAppearance()});document.querySelectorAll('[data-ls]').forEach(b=>b.onclick=()=>{D.settings.logoStyle=b.dataset.ls;save();openAppearance()})}};renderSheet()}
+wire(){document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{D.settings.theme=b.dataset.th;applyTheme();save();openAppearance()});document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{D.settings.accent=b.dataset.ac;applyTheme();save();openAppearance()});document.querySelectorAll('[data-ls]').forEach(b=>b.onclick=()=>{D.settings.logoStyle=b.dataset.ls;save();openAppearance()});
+document.getElementById('slab').onchange=e=>{D.settings.slab=e.target.value;save();openAppearance()};
+document.getElementById('atax').onchange=e=>{D.settings.afterTax=e.target.checked;save();openAppearance()}}};renderSheet()}
 async function sha(s){if(!(window.crypto&&crypto.subtle)){toast('PIN needs the app to be opened from its https link');throw new Error('no crypto')}const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('ledger:'+s));return[...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function openPin(){const has=!!D.settings.pinHash;let step=has?'verify':'new',first='';
 sheet={title:has?'PIN lock':'Set a PIN',body(){return`<div class="muted" style="margin-bottom:10px;line-height:1.4">${has?'Enter your current PIN to change or remove it.':'A 4–6 digit code asked for when the app opens. Keeps casual eyes out; it is not bank-grade security.'}</div><input id="pinIn" class="num" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="${step==='confirm'?'Enter it again':step==='verify'?'Current PIN':'New PIN'}" style="font-size:24px;letter-spacing:8px;text-align:center"><div id="pinMsg" class="muted" style="margin:8px 0;min-height:16px"></div><button class="btn p" id="ok">${step==='verify'?'Continue':step==='confirm'?'Save PIN':'Next'}</button>${has&&step==='verify'?'<button class="btn d" id="rm">Remove PIN</button>':''}`},
