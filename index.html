@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='7.3 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='7.4 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -267,6 +267,8 @@ if(isInvest(a)){const h=holdings(a),v=investValue(a);const pl=v==null?null:v-h.n
 return`<div class="row" data-acct="${a.id}">${logoEl(a)}<div class="main"><div class="t">${esc(a.name)}</div><div class="s">${KINDS[a.kind]||'Investment'}${isLand(a)&&a.area?' · '+(+a.area)+' '+unitLabel(a)+(a.state?' · '+esc(a.state):''):''}${usesUnits(a)&&h.units?' · '+(+h.units.toFixed(3))+' '+unitLabel(a):''}</div></div><div class="amt num">${v==null?money(h.net,0,cur(a)):money(v,0,cur(a))}${pl==null?'<small>set a rate</small>':`<small style="color:${pl>=0?'var(--in)':'var(--out)'}">${pl>=0?'+':'−'}${money(Math.abs(pl),0,cur(a))}</small>`}</div></div>`}
 if(isLoan(a)){const L=loanState(a);
 return`<div class="row" data-acct="${a.id}">${logoEl(a)}<div class="main"><div class="t">${esc(a.name)}</div><div class="s">${a.rate||0}% · ${money(L.daily,0,cur(a))}/day${L.months?' · '+L.months+' mo left':''}</div></div><div class="amt num out">${money(L.out,0,cur(a))}<small>outstanding</small></div></div>`}
+if(isCard(a)&&(a.closeDay||a.apr||a.limit)){const cs=cardState(a);
+return`<div class="row" data-acct="${a.id}">${logoEl(a)}<div class="main"><div class="t">${esc(a.name)}</div><div class="s">${cs.paidInFull?'paid in full':'due '+dlabel(cs.due)}${promoOn(a)?' · 0% to '+dlabel(a.promoUntil):(cs.apr>0?' · '+cs.apr+'%':'')}</div></div><div class="amt num ${cs.total>0?'out':''}">${money(cs.total,0,cur(a))}<small>${cs.paidInFull?'nothing due':money(cs.remaining,0,cur(a))+' due'}</small></div></div>`}
 const cr=a.type==='credit',sh=cr?-b:b;const col=cr?(sh>0?'out':''):(b<0?'out':'');
 return`<div class="row" data-acct="${a.id}">${logoEl(a)}<div class="main"><div class="t">${esc(a.name)}</div><div class="s">${a.type==='held'?'Held by '+esc(a.bank||'someone'):(a.bank?esc(a.bank)+' · ':'')+TYPES[a.type]} · ${cur(a)}</div></div><div class="amt num ${col}">${money(sh,0,cur(a))}${cr?`<small>${sh>0?'owed':'paid off'}</small>`:''}</div></div>`}
 function txnRow(t,showDate){const f=acct(t.accountId),to=acct(t.toAccountId);const cls=t.type==='expense'?'out':t.type==='income'?'in':'mv';const soft={out:'var(--outS)',in:'var(--inS)',mv:'var(--mvS)'}[cls],hard={out:'var(--out)',in:'var(--in)',mv:'var(--mv)'}[cls];
@@ -341,7 +343,7 @@ function goalsPage(){const c=ensureCur();const list=D.goals.filter(g=>g.currency
 const wt=+(D.settings.wTarget||0);const wp=wt?project(wt,{window:+(D.settings.wWin||6),includeInvest:D.settings.wInv!==false,extra:+(D.settings.wExtra||0)}):null;
 return`<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Goals</div><button class="link" id="addGoal">Create goal</button></div>
 <div class="card" style="margin-top:14px"><div class="brow" id="wealthCard" style="cursor:pointer"><div class="l"><span><b>${wt?'Wealth target':'Set a wealth target'}</b> <span class="muted" style="font-size:11px">›</span></span><span class="num">${wt?`<b>${wp.hit==null?'—':mLabel(wp.hit)}</b>`:'<span class="muted" style="font-size:13px">when will I get there?</span>'}</span></div>
-${wt?`<div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,'INR')} of ${money(wt,0,'INR')} · surplus ${money(wp.save,0,'INR')}/month${wp.debtFree!=null?' · debt-free '+mLabel(wp.debtFree):''}</div>`:'<div class="muted" style="font-size:11px;margin-top:4px">Uses your real income and spending to work out the date.</div>'}</div></div>
+${wt?`<div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,baseCur())} of ${money(wt,0,baseCur())} · surplus ${money(wp.save,0,baseCur())}/month${wp.debtFree!=null?' · debt-free '+mLabel(wp.debtFree):''}</div>`:'<div class="muted" style="font-size:11px;margin-top:4px">Uses your real income and spending to work out the date.</div>'}</div></div>
 ${curToggle()}
 ${list.length?`<div class="card" style="margin-top:14px">${list.map(g=>goalCard(g)).join('')}</div>`:`<div class="empty">No ${c} goals yet.<br><span class="muted" style="font-size:13px">A goal counts money you move into the accounts you pick — a savings account or someone holding money for you.</span></div>`}
 ${D.goals.length&&!list.length?`<div class="muted" style="text-align:center">You have ${D.goals.length} goal${D.goals.length>1?'s':''} in another currency.</div>`:''}
@@ -358,13 +360,13 @@ v.querySelector('#addGoal')?.addEventListener('click',()=>openGoalEdit());
 v.querySelector('#wealthCard')?.addEventListener('click',openWealth);
 document.querySelectorAll('nav [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
 if(tab==='reports')wireReports(v);
-v.querySelectorAll('[data-acct]').forEach(el=>el.onclick=()=>{const a=acct(el.dataset.acct);isInvest(a)?openInvestDetail(a):isLoan(a)?openLoanDetail(a):isPerson(a)?openPerson(a):openAccount(a)});
+v.querySelectorAll('[data-acct]').forEach(el=>el.onclick=()=>{const a=acct(el.dataset.acct);isInvest(a)?openInvestDetail(a):isLoan(a)?openLoanDetail(a):isCard(a)?openCardDetail(a):isPerson(a)?openPerson(a):openAccount(a)});
 v.querySelectorAll('[data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
 v.querySelector('#addAcct')?.addEventListener('click',()=>openAccount());
 v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)));
-v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.post.split('|');if(id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));const r2=dueRecurring().find(x=>x.r.id===id);if(!r2)return;openTxn(null,{type:'transfer',amount:r2.r.amount,date:r2.date,accountId:r2.r.accountId,toAccountId:r2.r.toAccountId,note:r2.r.name});return}
+v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.post.split('|');if(id.startsWith('card:')||id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));const r2=dueRecurring().find(x=>x.r.id===id);if(!r2)return;openTxn(null,{type:'transfer',amount:r2.r.amount,date:r2.date,accountId:r2.r.accountId,toAccountId:r2.r.toAccountId,note:r2.r.name});return}
 if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name,split:!!r.who,who:r.who||[]},()=>{r.posted=r.posted||[];r.posted.push(m)})});
-v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast('Hidden for '+mlabel(m).split(' ')[0]);return}
+v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('card:')||id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast('Hidden for '+mlabel(m).split(' ')[0]);return}
 if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
 const q=v.querySelector('#q');if(q){q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
 v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
@@ -385,7 +387,7 @@ el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip">
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')closeSheet()};
 document.getElementById('cancel').onclick=closeSheet;sheet.wire()}
 
-function openAccount(edit,isNew){if(isNew||edit&&!edit.id){const pre=edit||{};edit=null;var PRE=pre}const P=typeof PRE!=='undefined'?PRE:{};const st={name:edit?.name||'',bank:edit?.bank||'',type:edit?.type||P.type||'checking',currency:edit?.currency||P.currency||'USD',logoUrl:edit?.logoUrl||'',opening:edit?String(Math.abs(edit.opening||0)):'',bankSays:'',kind:edit?.kind||P.kind||'gold',rate:edit?.rate!=null?String(edit.rate):'',principal:edit?.principal!=null?String(edit.principal):'',emi:edit?.emi!=null&&edit.emi?String(edit.emi):'',months:edit?.months?String(edit.months):'',emiDay:edit?.emiDay||0,stDay:edit?.stDay||P.stDay||1,basis:edit?.basis||365,since:edit?.since||today(),showDue:edit?.showDue!==false,init:JSON.parse(JSON.stringify(edit?.init||{byPurity:{}})),rates:JSON.parse(JSON.stringify(edit?.rates||{})),rateAt:edit?.rateAt||'',busy:false,fmsg:'',show18:false,state:edit?.state||'',priceUnit:edit?.priceUnit||'10g',cal:edit?.cal||null,calIn:'',area:edit?.area??'',areaUnit:edit?.areaUnit||'sqft',pin:edit?.pin||'',apprPct:edit?.apprPct??'',monthly:edit?.monthly?String(edit.monthly):'',termMonths:edit?.termMonths?String(edit.termMonths):'',comp:edit?.comp??4,payout:edit?.payout??0,day:edit?.day||1};
+function openAccount(edit,isNew){if(isNew||edit&&!edit.id){const pre=edit||{};edit=null;var PRE=pre}const P=typeof PRE!=='undefined'?PRE:{};const st={name:edit?.name||'',bank:edit?.bank||'',type:edit?.type||P.type||'checking',currency:edit?.currency||P.currency||'USD',logoUrl:edit?.logoUrl||'',opening:edit?String(Math.abs(edit.opening||0)):'',bankSays:'',kind:edit?.kind||P.kind||'gold',rate:edit?.rate!=null?String(edit.rate):'',principal:edit?.principal!=null?String(edit.principal):'',emi:edit?.emi!=null&&edit.emi?String(edit.emi):'',months:edit?.months?String(edit.months):'',emiDay:edit?.emiDay||0,stDay:edit?.stDay||P.stDay||1,basis:edit?.basis||365,since:edit?.since||today(),showDue:edit?.showDue!==false,init:JSON.parse(JSON.stringify(edit?.init||{byPurity:{}})),rates:JSON.parse(JSON.stringify(edit?.rates||{})),rateAt:edit?.rateAt||'',busy:false,fmsg:'',show18:false,state:edit?.state||'',priceUnit:edit?.priceUnit||'10g',cal:edit?.cal||null,calIn:'',area:edit?.area??'',areaUnit:edit?.areaUnit||'sqft',pin:edit?.pin||'',apprPct:edit?.apprPct??'',monthly:edit?.monthly?String(edit.monthly):'',closeDay:edit?.closeDay||1,dueDay:edit?.dueDay||1,limit:edit?.limit?String(edit.limit):'',apr:edit?.apr?String(edit.apr):'',promoUntil:edit?.promoUntil||'',minFloor:edit?.minFloor?String(edit.minFloor):'',minPct:edit?.minPct?String(edit.minPct):'',minPlusInt:!!edit?.minPlusInt,termMonths:edit?.termMonths?String(edit.termMonths):'',comp:edit?.comp??4,payout:edit?.payout??0,day:edit?.day||1};
 sheet={title:edit?'Edit account':'New account',body(){const cr=st.type==='credit';const b=edit?balances()[edit.id]:null;
 return`<label class="field"><div>Account name</div><input id="an" value="${esc(st.name)}" placeholder="Everyday checking"></label>
 <div style="display:flex;gap:12px;align-items:flex-start"><div style="padding-top:22px">${logoEl({bank:st.bank,name:st.name||'?',logoUrl:st.logoUrl,type:st.type,kind:st.kind},44)}</div><label class="field" style="flex:1"><div>${st.type==='held'?'Who holds it':st.type==='invest'?(isDep({kind:st.kind})?'Bank':st.kind==='fund'?'Fund house <span class="muted">(optional)</span>':'Where it\'s kept <span class="muted">(optional)</span>'):'Bank'}</div><input id="ab" value="${esc(st.bank)}" autocomplete="off" placeholder="${st.type==='held'?'Dad, Mom, partner…':st.type==='invest'&&!isDep({kind:st.kind})&&st.kind!=='fund'?'Locker, home, broker…':'Start typing: HDFC, SBI, Chase…'}">${st.type!=='held'&&(st.type!=='invest'||isDep({kind:st.kind})||st.kind==='fund')?`<div id="bankSug" style="position:relative"></div>`:''}</label></div>
@@ -427,6 +429,12 @@ ${st.kind==='land'?'':rate}${g?`<button class="btn" id="fetchRate" style="margin
 <div class="muted" style="font-size:11px;margin-top:6px">${st.cal?.ratio?`Calibrated ${dlabel(st.cal.date)} against a market rate of ${money(st.cal.spot,0,st.currency)}/g. Fetches now match your local level and still follow daily market moves.`:'Type the rate you see for your state and tap Use this — the app remembers the local premium (duty, GST, local charges) and applies it to future fetches.'}</div>`:''}
 ${st.fmsg?`<div class="muted" style="margin-top:8px;font-size:12px">${esc(st.fmsg)}</div>`:''}
 ${any?`<div class="note mv" style="background:var(--mvS);margin-top:10px">Worth <b class="num">${money(val,0,st.currency)}</b> today${cost>0?` · ${val-cost>=0?'profit':'loss'} <b class="num" style="color:${val-cost>=0?'var(--in)':'var(--out)'}">${money(Math.abs(val-cost),0,st.currency)}</b> (${((val-cost)/cost*100).toFixed(1)}%)`:''}</div>`:''}</div>`})()}`:''}
+${st.type==='credit'?`<div class="g2"><label class="field" style="margin:0"><div>Statement closes on day</div><select id="ccd">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${(+st.closeDay||1)===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label><label class="field" style="margin:0"><div>Payment due on day</div><select id="cdd">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${(+st.dueDay||1)===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label></div>
+<div class="g2"><label class="field" style="margin:0"><div>Credit limit (${CUR[st.currency].sym}) <span class="muted">optional</span></div><input id="clim" class="num" inputmode="decimal" value="${esc(st.limit)}" placeholder="5000"></label><label class="field" style="margin:0"><div>APR (% a year) <span class="muted">optional</span></div><input id="capr" class="num" inputmode="decimal" value="${esc(st.apr)}" placeholder="24.99"></label></div>
+<label class="field"><div>0% promotion until <span class="muted">(optional)</span></div><input id="cpro" type="date" value="${st.promoUntil||''}"></label>
+<div class="g2"><label class="field" style="margin:0"><div>Minimum: floor (${CUR[st.currency].sym})</div><input id="cmf" class="num" inputmode="decimal" value="${esc(st.minFloor)}" placeholder="35"></label><label class="field" style="margin:0"><div>or % of balance</div><input id="cmp" class="num" inputmode="decimal" value="${esc(st.minPct)}" placeholder="1"></label></div>
+<label class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px"><input type="checkbox" id="cmi" style="width:auto"${st.minPlusInt?' checked':''}><span style="font-size:14px">Minimum also adds that month's interest (Amex style)</span></label>
+${st.promoUntil&&st.promoUntil>=today()?`<div class="note in" style="background:var(--inS)">0% until ${dlabel(st.promoUntil)} — no interest until then. After that, ${st.apr?esc(st.apr)+'%':'your regular APR'} applies to whatever is left.</div>`:parseFloat(st.apr)>0?`<div class="note mv" style="background:var(--mvS)">Interest only applies if you don't pay the statement balance by the due date. Pay in full and it stays at zero.</div>`:''}`:''}
 ${st.type==='loan'?`<div class="g2"><label class="field"><div>Outstanding now (${CUR[st.currency].sym})</div><input id="apr" class="num" inputmode="decimal" value="${esc(st.principal)}" placeholder="4078306.70"></label><label class="field"><div>Interest rate (% per year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="12.5"></label></div>
 <div class="g2"><label class="field"><div>Balance updates on day</div><select id="asd">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${st.stDay===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label><label class="field"><div>Day-count basis</div><select id="ab2"><option value="365"${st.basis===365?' selected':''}>365</option><option value="360"${st.basis===360?' selected':''}>360</option></select></label></div>
 <div class="g2"><label class="field"><div>Months left <span class="muted">(tenure)</span></div><input id="amo" class="num" inputmode="numeric" value="${esc(st.months)}" placeholder="60"></label><label class="field"><div>EMI amount</div><input id="aemi" class="num" inputmode="decimal" value="${esc(st.emi)}" placeholder="0.00"></label></div>
@@ -458,7 +466,7 @@ $('bs')&&($('bs').oninput=e=>{st.bankSays=e.target.value.replace(/[^0-9.]/g,'');
 $('adj')&&($('adj').onclick=()=>{const b=balances()[edit.id];const cr=st.type==='credit';const shown=cr?-b:b;const diff=Math.round((parseFloat(st.bankSays)-shown)*100)/100;if(!diff)return;
 const more=diff>0;const type=cr?(more?'expense':'income'):(more?'income':'expense');
 D.txns.push({id:uid(),created:Date.now(),type,amount:Math.abs(diff),date:today(),accountId:edit.id,category:'Adjustment',note:'Balance correction to match bank'});sheet=null;save();toast('Adjustment added — balances now match')});
-const grab=()=>{['ao','ar','apr','aemi','amo','amon','aterm'].forEach(k=>{if($(k))st[{ao:'opening',ar:'rate',apr:'principal',aemi:'emi',amo:'months',amon:'monthly',aterm:'termMonths'}[k]]=$(k).value});if($('ab'))st.bank=$('ab').value;if($('al'))st.logoUrl=$('al').value};
+const grab=()=>{['ao','ar','apr','aemi','amo','amon','aterm','capr','clim','cmf','cmp'].forEach(k=>{if($(k))st[{ao:'opening',ar:'rate',apr:'principal',aemi:'emi',amo:'months',amon:'monthly',aterm:'termMonths',capr:'apr',clim:'limit',cmf:'minFloor',cmp:'minPct'}[k]]=$(k).value});if($('ab'))st.bank=$('ab').value;if($('al'))st.logoUrl=$('al').value};
 $('at').onchange=e=>{grab();st.type=e.target.value;renderSheet()};
 $('ak')&&($('ak').onchange=e=>{grab();st.kind=e.target.value;renderSheet()});
 $('ar')&&($('ar').oninput=e=>{st.rate=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.rate},$('ar').onchange=()=>{grab();renderSheet()});
@@ -483,6 +491,13 @@ $('aterm')&&($('aterm').oninput=e=>{st.termMonths=e.target.value.replace(/[^0-9]
 $('apay')&&($('apay').onchange=e=>{grab();st.payout=+e.target.value;renderSheet()});
 $('acomp')&&($('acomp').onchange=e=>{grab();st.comp=+e.target.value;renderSheet()});
 $('aday')&&($('aday').onchange=e=>st.day=+e.target.value);
+$('ccd')&&($('ccd').onchange=e=>st.closeDay=+e.target.value);$('cdd')&&($('cdd').onchange=e=>st.dueDay=+e.target.value);
+$('clim')&&($('clim').oninput=e=>{st.limit=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.limit});
+$('capr')&&($('capr').oninput=e=>{st.apr=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.apr},$('capr').onchange=()=>{grab();renderSheet()});
+$('cpro')&&($('cpro').onchange=e=>{grab();st.promoUntil=e.target.value;renderSheet()});
+$('cmf')&&($('cmf').oninput=e=>{st.minFloor=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.minFloor});
+$('cmp')&&($('cmp').oninput=e=>{st.minPct=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.minPct});
+$('cmi')&&($('cmi').onchange=e=>st.minPlusInt=e.target.checked);
 $('gcal')&&($('gcal').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'');st.calIn=e.target.value});
 $('calBtn')&&($('calBtn').onclick=async()=>{grab();pull();const local=parseFloat(st.calIn)/(st.priceUnit==='10g'?10:1);
 if(!(local>0)){st.fmsg='Type the 24k rate you see locally first.';return renderSheet()}
@@ -500,6 +515,7 @@ st.busy=false;renderSheet()});$('asdue')&&($('asdue').onchange=e=>st.showDue=e.t
 $('settleBtn')&&($('settleBtn').onclick=()=>openPerson(edit));
 $('ok').onclick=()=>{if(!st.name.trim())return;const o=parseFloat(st.opening)||0;const a={id:edit?.id||uid(),name:st.name.trim(),bank:st.bank.trim(),type:st.type,currency:st.currency,logoUrl:st.logoUrl||undefined,opening:(st.type==='invest'||st.type==='loan')?0:(st.type==='credit'?-o:o)};
 if(st.type==='invest'){a.kind=st.kind;pull();a.rates=st.rates;a.rateAt=st.rateAt||undefined;a.init=st.init;a.state=st.state||undefined;a.priceUnit=st.priceUnit;a.cal=st.cal||undefined;if(st.kind==='land'){a.area=parseFloat(st.area)||0;a.areaUnit=st.areaUnit;a.pin=st.pin||undefined;a.apprPct=parseFloat(st.apprPct)||0;a.since=st.since;if(!a.rateAt&&a.rates?.unit)a.rateAt=today()}if(isDep({kind:st.kind})){a.rate=parseFloat(st.rate)||0;a.since=st.since;a.termMonths=parseInt(st.termMonths)||0;a.comp=+st.comp;a.payout=+st.payout;if(st.kind==='rd'){a.monthly=parseFloat(st.monthly)||0;a.day=+st.day}else a.principal=parseFloat(st.principal)||0}}
+if(st.type==='credit'){a.closeDay=+st.closeDay||1;a.dueDay=+st.dueDay||1;a.limit=parseFloat(st.limit)||0;a.apr=parseFloat(st.apr)||0;a.promoUntil=st.promoUntil||undefined;a.minFloor=parseFloat(st.minFloor)||0;a.minPct=parseFloat(st.minPct)||0;a.minPlusInt=st.minPlusInt||undefined}
 if(st.type==='loan'){a.rate=parseFloat(st.rate)||0;a.principal=parseFloat(st.principal)||0;a.months=parseInt(st.months)||0;a.emi=parseFloat(st.emi)||(a.months?Math.round(emiFor(a.principal,a.rate,a.months)*100)/100:0);a.emiDay=st.emiDay||st.stDay;a.stDay=st.stDay;a.basis=st.basis;a.since=st.since;a.showDue=st.showDue}
 if(edit)D.accounts=D.accounts.map(x=>x.id===a.id?a:x);else D.accounts.push(a);sheet=null;save();toast(edit?'Account updated':'Account added')};
 $('del')&&($('del').onclick=()=>{if(!confirm('Remove this account and every transaction on it?'))return;D.accounts=D.accounts.filter(a=>a.id!==edit.id);D.txns=D.txns.filter(t=>t.accountId!==edit.id&&t.toAccountId!==edit.id);sheet=null;save();toast('Account removed')});
@@ -823,6 +839,11 @@ const last=guard[guard.length-1];if(!last)return;const m=mk(last);if((a.skipDue|
 const got=D.txns.some(t=>t.type==='transfer'&&t.accountId===a.id&&mk(t.date)===m);
 const into=(D.accounts.find(x=>cur(x)===cur(a)&&['checking','savings'].includes(x.type))||{}).id;
 if(!got)out.push({r:{id:'pay:'+a.id,name:a.name+' interest',type:'transfer',amount:Math.round(st.perPayout*100)/100,accountId:a.id,toAccountId:into,posted:[]},m,date:last})});
+D.accounts.filter(a=>isCard(a)&&a.closeDay&&a.showDue!==false).forEach(a=>{const cs=cardState(a);if(cs.paidInFull)return;
+const m=mk(cs.due);if((a.skipDue||[]).includes(m))return;
+const daysTo=Math.ceil((new Date(cs.due)-new Date(today()))/864e5);if(daysTo>7)return;
+const from=(D.accounts.find(x=>cur(x)===cur(a)&&['checking','savings'].includes(x.type))||{}).id;
+out.push({r:{id:'card:'+a.id,name:a.name+(daysTo<0?' — past due':' statement'),type:'transfer',amount:Math.round(cs.remaining*100)/100,accountId:from,toAccountId:a.id,posted:[]},m,date:cs.due})});
 D.accounts.filter(a=>isLoan(a)&&a.showDue!==false&&a.emi>0).forEach(a=>{const m=now;if((a.skipDue||[]).includes(m))return;const d=dueDate({day:a.emiDay||a.stDay||1},m);const paid=D.txns.some(t=>t.type==='transfer'&&t.toAccountId===a.id&&mk(t.date)===m);
 if(d<=today()&&!paid)out.push({r:{id:'loan:'+a.id,name:a.name+' EMI',type:'transfer',amount:a.emi,accountId:(D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'))||{}).id,toAccountId:a.id,posted:[]},m,date:d,loan:true})});(D.recurring||[]).forEach(r=>{if(r.active===false||!acct(r.accountId))return;let m=r.start||now;let guard=0;while(m<=now&&guard++<120){const d=dueDate(r,m);if(d<=today()&&!(r.posted||[]).includes(m))out.push({r,m,date:d});m=shiftMonth(m,1)}});return out.sort((a,b)=>a.date.localeCompare(b.date))}
 function openRecurring(){const list=D.recurring||[];const tot={};list.filter(r=>r.active!==false&&r.type==='expense').forEach(r=>{const c=cur(acct(r.accountId));tot[c]=(tot[c]||0)+r.amount});
@@ -929,6 +950,36 @@ const g24=usdOz*fx/31.1035;const perGram={};Object.entries(PURITY).forEach(([k,v
 async function fetchFx(a,b){const urls=[`https://api.frankfurter.app/latest?from=${a}&to=${b}`,`https://open.er-api.com/v6/latest/${a}`];
 for(const u of urls){try{const r=await fetch(u);const j=await r.json();const v=(j.rates&&j.rates[b])||null;if(v>0)return v}catch(e){}}throw new Error('no fx')}
 
+// ---------- credit card cycles ----------
+const isCard=a=>a&&a.type==='credit';
+const promoOn=a=>a&&a.promoUntil&&a.promoUntil>=today();
+const cardApr=a=>promoOn(a)?0:+(a.apr||0);
+function cardState(a,asOf){asOf=asOf||today();const close=+(a.closeDay||1);const dueD=+(a.dueDay||close);
+// last close date on/before asOf
+const dOf=(y,m,d)=>{const last=new Date(y,m+1,0).getDate();return `${y}-${String(m+1).padStart(2,'0')}-${String(Math.min(d,last)).padStart(2,'0')}`};
+const t=new Date(asOf+'T00:00:00');let y=t.getFullYear(),mo=t.getMonth();
+let lastClose=dOf(y,mo,close);if(lastClose>asOf){const p=new Date(y,mo-1,1);lastClose=dOf(p.getFullYear(),p.getMonth(),close)}
+const pc=new Date(lastClose+'T00:00:00');const prev=new Date(pc.getFullYear(),pc.getMonth()-1,1);const prevClose=dOf(prev.getFullYear(),prev.getMonth(),close);
+// due date for the statement that closed on lastClose
+const dd=new Date(lastClose+'T00:00:00');let dueMo=dd.getMonth()+(dueD<close?1:0);const due=dOf(dd.getFullYear(),dueMo,dueD);
+const bal=balances();const total=-(bal[a.id]||0);
+// statement balance = spend in (prevClose, lastClose] minus carry-in unpaid? use: charges up to lastClose minus payments up to lastClose
+let charges=0,pays=0,sinceCharges=0,sincePays=0;
+D.txns.forEach(x=>{const d=x.date;
+const isCharge=(x.type==='expense'&&x.accountId===a.id)||(x.type==='transfer'&&x.accountId===a.id&&!isCard(acct(x.toAccountId)));
+const isPay=(x.type==='transfer'&&x.toAccountId===a.id)||(x.type==='income'&&x.accountId===a.id);
+if(!isCharge&&!isPay)return;const amt=x.amount;
+if(d<=lastClose){if(isCharge)charges+=amt;else pays+=amt}else{if(isCharge)sinceCharges+=amt;else sincePays+=amt}});
+const opening=Math.max(0,-(a.opening||0));
+const stmt=Math.max(0,opening+charges-pays);
+const remaining=Math.max(0,stmt-sincePays);
+const paidInFull=remaining<=0.005;
+const apr=cardApr(a);const daily=apr>0&&total>0?total*apr/100/365:0;
+const pctMin=+(a.minPct||0),floorMin=+(a.minFloor||0);
+let minDue=0;if(stmt>0){minDue=Math.max(floorMin,stmt*pctMin/100);if(a.minPlusInt)minDue+=daily*30;minDue=Math.min(minDue,stmt);minDue=Math.max(0,minDue-sincePays)}
+const util=a.limit>0?total/a.limit*100:null;
+const promoDays=a.promoUntil?Math.ceil((new Date(a.promoUntil)-new Date(today()))/864e5):null;
+return{total,stmt,remaining,paidInFull,due,lastClose,nextClose:dOf(pc.getFullYear(),pc.getMonth()+1,close),minDue,apr,daily,util,promoDays,sinceCharges,overdue:asOf>due&&!paidInFull}}
 // ---------- loans ----------
 const emiFor=(P,ratePct,n)=>{const r=ratePct/1200;if(!(P>0)||!(n>0))return 0;if(r===0)return P/n;const f=Math.pow(1+r,n);return P*r*f/(f-1)};
 const monthsFor=(P,ratePct,emi)=>{const r=ratePct/1200;if(!(P>0)||!(emi>0))return null;if(emi<=P*r)return null;if(r===0)return Math.ceil(P/emi);return Math.ceil(Math.log(emi/(emi-P*r))/Math.log(1+r))};
@@ -953,6 +1004,25 @@ ${list.length?`<div class="card"><div class="brow" style="background:var(--bg)">
 wire(){document.querySelectorAll('[data-lc]').forEach(bt=>bt.onclick=()=>{R.cur=bt.dataset.lc;localStorage.setItem('ledger-cur',R.cur);openLoans()});
 document.querySelectorAll('#sheet [data-acct]').forEach(el=>el.onclick=()=>openLoanDetail(acct(el.dataset.acct)));
 document.getElementById('addLoan').onclick=()=>openAccount({type:'loan',currency:c,stDay:9},true)}};renderSheet()}
+function openCardDetail(a){const c=cur(a);
+sheet={title:a.name,body(){const s=cardState(a);const f=x=>money(x,0,c);
+const rows=D.txns.filter(t=>t.accountId===a.id||t.toAccountId===a.id).sort((x,y)=>y.date.localeCompare(x.date)).slice(0,12);
+return`<div class="kpi" style="grid-template-columns:1fr 1fr;margin:0 0 12px">
+<div class="stat"><span>Total balance</span><b class="num ${s.total>0?'out':''}">${f(s.total)}</b><i>everything owed now</i></div>
+<div class="stat"><span>Remaining statement</span><b class="num" style="color:${s.paidInFull?'var(--in)':'var(--ink)'}">${f(s.remaining)}</b><i>${s.paidInFull?'paid in full ✓':'due '+dlabel(s.due)}</i></div>
+<div class="stat"><span>Minimum due</span><b class="num">${f(s.minDue)}</b><i>${s.minDue<=0.005?'satisfied this cycle':'floor or % of statement'}</i></div>
+<div class="stat"><span>${promoOn(a)?'0% until':'Interest'}</span><b class="num">${promoOn(a)?dlabel(a.promoUntil):(s.apr>0?s.apr+'%':'none set')}</b><i>${promoOn(a)?(s.promoDays+' days left'):(s.apr>0?(s.paidInFull?'none while paid in full':f(s.daily)+'/day'):'no APR entered')}</i></div></div>
+${!s.paidInFull?`<div class="note ${s.overdue?'out':'mv'}" style="background:var(--${s.overdue?'outS':'mvS'})">${s.overdue?`Past due — ${f(s.remaining)} was due ${dlabel(s.due)}.`:`Pay <b class="num">${f(s.remaining)}</b> by ${dlabel(s.due)} to stay interest-free.`}${s.apr>0&&!promoOn(a)?` Carrying it would cost about ${f(s.daily*30)} a month.`:''}</div>`:`<div class="note in" style="background:var(--inS)">Statement paid in full. ${s.sinceCharges>0?f(s.sinceCharges)+' of new spending closes '+dlabel(s.nextClose)+'.':'Nothing new since '+dlabel(s.lastClose)+'.'}</div>`}
+${promoOn(a)&&s.promoDays<=90&&s.total>0?`<div class="note out" style="background:var(--outS);margin-top:10px">0% ends in ${s.promoDays} days. ${f(s.total)} would then accrue${a.apr?` at ${a.apr}% — about ${f(s.total*a.apr/100/12)} a month`:''}. Clearing it before then is the cheapest money you will ever make.</div>`:''}
+${s.util!=null?`<div class="card" style="padding:12px 14px;margin-top:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Credit used</span><b class="num">${s.util.toFixed(1)}% of ${f(a.limit)}</b></div><div class="track" style="margin-top:8px"><i style="width:${Math.min(100,s.util)}%;background:${s.util>30?'var(--out)':'var(--in)'}"></i></div><div class="muted" style="font-size:11px;margin-top:4px">Under 30% is generally considered healthy.</div></div>`:''}
+<div class="card" style="padding:12px 14px;margin-top:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:13px"><span class="muted">Statement closed</span><span>${dlabel(s.lastClose)}</span></div><div class="l" style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px"><span class="muted">Next closes</span><span>${dlabel(s.nextClose)}</span></div><div class="l" style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px"><span class="muted">Payment due</span><span>${dlabel(s.due)}</span></div></div>
+${rows.length?`<div class="sec" style="margin-top:4px">Recent</div><div class="card">${rows.map(t=>txnRow(t,1)).join('')}</div>`:''}
+<div class="tools" style="margin-top:12px"><button class="btn p" id="payCard" style="width:auto">Record a payment</button><button class="btn" id="editAcct" style="width:auto">Edit card</button></div>`},
+wire(){const $=id=>document.getElementById(id);const s=cardState(a);
+$('payCard').onclick=()=>{const from=D.accounts.find(x=>cur(x)===c&&['checking','savings'].includes(x.type));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:s.remaining>0?s.remaining:undefined,note:a.name+' payment'})};
+$('editAcct').onclick=()=>openAccount(a);
+document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
+document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 function openLoanDetail(a){const c=cur(a);let extraM='',lumpAmt='',lumpDate=today();
 sheet={title:a.name,body(){const L=loanState(a);const f=x=>money(x,0,c);
 return`<div class="kpi" style="grid-template-columns:1fr 1fr;margin:0 0 12px"><div class="stat"><span>Outstanding</span><b class="num out">${f(L.out)}</b><i class="num">${f(L.principalOut)} principal${L.accrued>0.005?' + '+f(L.accrued)+' interest so far':''}</i></div>
@@ -1019,29 +1089,39 @@ document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTx
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
 // ---------- wealth projection ----------
-const fxRate=()=>{const t=[...D.txns].filter(x=>x.type==='transfer'&&x.toAmount>0&&cur(acct(x.accountId))==='USD'&&cur(acct(x.toAccountId))==='INR').sort((a,b)=>b.date.localeCompare(a.date))[0];
-return +(D.settings.fx||(t?(t.toAmount/t.amount):88)).toFixed(2)};
+const lastTransferFx=()=>{const t=[...D.txns].filter(x=>x.type==='transfer'&&x.toAmount>0&&cur(acct(x.accountId))==='USD'&&cur(acct(x.toAccountId))==='INR').sort((a,b)=>b.date.localeCompare(a.date))[0];return t?+(t.toAmount/t.amount).toFixed(2):null};
+const fxSource=()=>D.settings.fxMode||'transfer';
+const fxRate=()=>{const m=fxSource();const lt=lastTransferFx();
+if(m==='manual'&&+D.settings.fx>0)return +(+D.settings.fx).toFixed(2);
+if(m==='live'&&+D.settings.fxLive>0)return +(+D.settings.fxLive).toFixed(2);
+return +(lt||D.settings.fxLive||D.settings.fx||88).toFixed(2)};
+const baseCur=()=>D.settings.wCur||'INR';
 const toINR=(v,c)=>c==='INR'?v:v*fxRate();
+const toBase=(v,c)=>{const b=baseCur();if(c===b)return v;return b==='INR'?v*fxRate():v/fxRate()};
 // liquid = cash/checking/savings/held ; deposits = fd/rd/bond/ppf ; growth = gold/fund/stock/land
-function wealthNow(includeInvest){const b=balances();let liquid=0,dep=0,inv=0,debt=0;
+function wealthNow(includeInvest){const b=balances();let liquid=0,dep=0,inv=0,debt=0;const by={USD:{liquid:0,dep:0,inv:0,debt:0},INR:{liquid:0,dep:0,inv:0,debt:0}};
+const add=(k,v,c)=>{by[c]&&(by[c][k]+=v);const t=toBase(v,c);if(k==='liquid')liquid+=t;else if(k==='dep')dep+=t;else if(k==='inv')inv+=t;else debt+=t};
 D.accounts.forEach(a=>{const c=cur(a);
-if(isLoan(a))debt+=toINR(-b[a.id],c);
-else if(a.type==='credit')debt+=toINR(-b[a.id],c);
-else if(isInvest(a)){const v=investValue(a)??holdings(a).net;if(isDep(a))dep+=toINR(v,c);else inv+=toINR(v,c)}
-else liquid+=toINR(b[a.id],c)});
-return{liquid,dep,inv,debt,net:liquid+dep+(includeInvest?inv:0)-debt}}
-function flowStats(months){const now=mk(today());const ms=[];for(let i=1;i<=months;i++)ms.push(shiftMonth(now,-i));
+if(isLoan(a))add('debt',-b[a.id],c);
+else if(isCard(a))add('debt',(a.closeDay?cardState(a).total:-b[a.id]),c);
+else if(isInvest(a)){const v=investValue(a)??holdings(a).net;add(isDep(a)?'dep':'inv',v,c)}
+else add('liquid',b[a.id],c)});
+return{liquid,dep,inv,debt,by,net:liquid+dep+(includeInvest?inv:0)-debt}}
+function flowStats(months){const now=mk(today());const dates=D.txns.map(t=>t.date).filter(Boolean).sort();
+const first=dates.length?mk(dates[0]):now;
+const ms=[];for(let i=1;i<=months;i++){const m=shiftMonth(now,-i);if(m>=first)ms.push(m)}
+const asked=months;const partial=ms.length<months;
 let inc=0,spent=0,emi=0,n=ms.length||1;
-ms.forEach(m=>{['USD','INR'].forEach(c=>{inc+=toINR(earnedIn(m,c),c);spent+=toINR(spentIn(m,c),c)});
-D.txns.forEach(t=>{if(t.type==='transfer'&&isLoan(acct(t.toAccountId))&&mk(t.date)===m)emi+=toINR(t.amount,cur(acct(t.accountId)))})});
-return{months:n,income:inc/n,spend:spent/n,emi:emi/n,surplus:(inc-spent-emi)/n}}
+ms.forEach(m=>{['USD','INR'].forEach(c=>{inc+=toBase(earnedIn(m,c),c);spent+=toBase(spentIn(m,c),c)});
+D.txns.forEach(t=>{if(t.type==='transfer'&&isLoan(acct(t.toAccountId))&&mk(t.date)===m)emi+=toBase(t.amount,cur(acct(t.accountId)))})});
+return{months:ms.length,asked,partial,thin:ms.length===0,income:inc/n,spend:spent/n,emi:emi/n,surplus:(inc-spent-emi)/n}}
 function project(target,opt){opt=opt||{};const inc=opt.includeInvest!==false;const extra=+(opt.extra||0);
 const f=flowStats(opt.window||6);const w=wealthNow(inc);
 let liquid=w.liquid+w.dep+(inc?w.inv:0);
 const loans=D.accounts.filter(isLoan).map(a=>({a,bal:loanState(a).out,rate:(a.rate||0)/100,emi:a.emi||0,c:cur(a)}));
-let cards=D.accounts.filter(x=>x.type==='credit').reduce((s,x)=>s+toINR(-balances()[x.id],cur(x)),0);
+let cards=D.accounts.filter(isCard).reduce((s,x)=>s+toBase(x.closeDay?cardState(x).total:-balances()[x.id],cur(x)),0);
 const save=f.surplus+extra;let m=0,debtFree=null,hit=null;const path=[];
-for(m=0;m<=600;m++){const debt=loans.reduce((s,l)=>s+toINR(Math.max(0,l.bal),l.c),0)+cards;
+for(m=0;m<=600;m++){const debt=loans.reduce((s,l)=>s+toBase(Math.max(0,l.bal),l.c),0)+cards;
 const net=liquid-debt;
 if(m%12===0||m<2)path.push({m,liquid,debt,net});
 if(hit===null&&net>=target)hit=m;
@@ -1049,7 +1129,7 @@ if(debtFree===null&&debt<=0.01)debtFree=m;
 if(hit!==null&&debtFree!==null)break;
 // advance one month
 let freed=0;
-loans.forEach(l=>{if(l.bal<=0){freed+=toINR(l.emi,l.c);return}
+loans.forEach(l=>{if(l.bal<=0){freed+=toBase(l.emi,l.c);return}
 const int=l.bal*l.rate/12;l.bal=Math.max(0,l.bal+int-l.emi);if(l.bal<=0)freed+=0});
 if(cards>0)cards=Math.max(0,cards-Math.min(cards,save>0?save*0.5:0));
 liquid+=save+freed;
@@ -1067,21 +1147,23 @@ Object.keys(hist).forEach(k=>hist[k]/=ms.length||1);
 const overBudget=e>0?a-e:0;const overAvg=h>0?a-h:0;
 if(overBudget>1||overAvg>1){ideas.push({cat:k,c,actual:a,budget:e,avg:h,overBudget,overAvg,
 save:Math.max(overBudget,overAvg),pctAvg:h>0?Math.round((a-h)/h*100):null})}})});
-return ideas.sort((x,y)=>toINR(y.save,y.c)-toINR(x.save,x.c)).slice(0,8)}
+return ideas.sort((x,y)=>toBase(y.save,y.c)-toBase(x.save,x.c)).slice(0,8)}
 
 // ---------- wealth goal UI ----------
 function openWealth(){const st=D.settings;
 sheet={title:'Wealth target',body(){const target=+(st.wTarget||0);
 if(!target)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Name an amount and the app works out the date, using what you actually earn and spend — not estimates. Everything is converted to rupees at the rate below.</div>
-<label class="field"><div>Target net worth (₹)</div><input id="wt" class="num" inputmode="decimal" placeholder="5000000"></label>
+<div class="seg" style="grid-template-columns:1fr 1fr">${['INR','USD'].map(k=>`<button data-wcur="${k}" class="${baseCur()===k?'on':''}">${k} ${CUR[k].sym}</button>`).join('')}</div>
+<label class="field"><div>Target net worth (${CUR[baseCur()].sym})</div><input id="wt" class="num" inputmode="decimal" placeholder="${baseCur()==='INR'?'5000000':'120000'}"></label>
 <button class="btn p" id="wtOk">Set target</button>`;
 const p=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:+(st.wExtra||0)});
-const f=x=>money(x,0,'INR');
+const f=x=>money(x,0,baseCur());
 const alt=project(target,{window:+(st.wWin||6),includeInvest:st.wInv===false,extra:+(st.wExtra||0)});
 const ideas=cutIdeas(+(st.wWin||6));
 const withCuts=+(st.wExtra||0);
 return`<div class="kpi" style="grid-template-columns:1fr;margin:0 0 12px"><div class="stat"><span>Target ${f(target)} · reached</span><b class="num" style="font-size:26px;color:${p.hit==null?'var(--out)':'var(--in)'}">${p.hit==null?'not at this pace':mLabel(p.hit)}</b><i>${p.hit==null?'surplus is too small — see the cuts below':dur(p.hit)+' away at '+f(p.save)+'/month'}</i></div></div>
-<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">From your last ${p.months} months</div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">${p.thin?'No complete months of history yet':`From your last ${p.months} complete month${p.months===1?'':'s'}${p.partial?` — you asked for ${p.asked}, that's all the history there is`:''}`}</div>
+${p.thin?`<div class="note out" style="background:var(--outS);margin:0 0 10px">Nothing measured yet, so the figures below are only what you type into "If I save more each month". Come back after a full month of entries.</div>`:p.months<3?`<div class="note mv" style="background:var(--mvS);margin:0 0 10px">Based on ${p.months} month${p.months===1?'':'s'} — treat the date as rough until you have a few more.</div>`:''}
 ${[['Money in',p.income,'in'],['Actually spent',-p.spend,'out'],['Loan EMIs',-p.emi,'out']].map(([l,v,cl])=>`<div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span>${l}</span><span class="num ${cl}">${v<0?'−':'+'}${f(Math.abs(v))}</span></div>`).join('')}
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:8px 0 0;border-top:1px solid var(--line);margin-top:4px"><span><b>Real surplus</b></span><b class="num">${f(p.save)}/month</b></div>
 <div class="seg" style="grid-template-columns:1fr 1fr;margin:12px 0 0">${[[3,'3-month average'],[6,'6-month average']].map(([v,l])=>`<button data-win="${v}" class="${+(st.wWin||6)===v?'on':''}" style="font-size:12px">${l}</button>`).join('')}</div></div>
@@ -1089,6 +1171,10 @@ ${[['Money in',p.income,'in'],['Actually spent',-p.spend,'out'],['Loan EMIs',-p.
 ${[['Cash & savings',p.liquid],['Deposits (FD/RD/bonds)',p.dep],['Gold, funds, land',p.inv],['Loans & cards',-p.debt]].filter(([,v])=>Math.abs(v)>0.5).map(([l,v])=>`<div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span>${l}</span><span class="num ${v<0?'out':''}">${v<0?'−':''}${f(Math.abs(v))}</span></div>`).join('')}
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:8px 0 0;border-top:1px solid var(--line);margin-top:4px"><span><b>Net worth</b></span><b class="num" style="color:${p.net>=0?'var(--in)':'var(--out)'}">${f(p.net)}</b></div>
 <div class="track" style="margin-top:8px"><i style="width:${pct(Math.max(0,p.net),target)}%;background:var(--accent)"></i></div>
+${(()=>{const b=p.by;const rows=['USD','INR'].map(c=>{const x=b[c];const netc=x.liquid+x.dep+(st.wInv!==false?x.inv:0)-x.debt;
+if(!x.liquid&&!x.dep&&!x.inv&&!x.debt)return'';
+return`<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span class="muted">${c} side</span><span class="num" style="color:${netc>=0?'var(--in)':'var(--out)'}">${money(netc,0,c)}${c!==baseCur()?` <span class="muted">= ${f(toBase(netc,c))}</span>`:''}</span></div>`}).join('');
+return rows?`<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">${rows}</div>`:''})()}
 <div class="seg" style="grid-template-columns:1fr 1fr;margin:12px 0 0">${[[true,'Everything'],[false,'Cash & deposits only']].map(([v,l])=>`<button data-inv="${v}" class="${(st.wInv!==false)===v?'on':''}" style="font-size:12px">${l}</button>`).join('')}</div>
 <div class="muted" style="font-size:11px;margin-top:6px">Other way: ${alt.hit==null?'not reached at this pace':mLabel(alt.hit)}. Gold uses your saved rate; land uses the rate you set.</div></div>
 <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Debt-free</span><b>${p.debtFree==null?'—':mLabel(p.debtFree)}</b></div>
@@ -1102,7 +1188,13 @@ ${ideas.length?`<div class="card">${ideas.map((i,n)=>`<div class="brow"><div cla
 <div class="muted num" style="font-size:11px;margin-top:2px">Trimming ${money(i.save,0,i.c)}/month → ${(()=>{const e=+(st.wExtra||0)+toINR(i.save,i.c);const q=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:e});return p.hit!=null&&q.hit!=null?`${dur(p.hit-q.hit)} sooner`:'helps'})()}</div>
 <div class="tools" style="margin-top:8px"><button class="btn" data-cut="${toINR(i.save,i.c).toFixed(2)}" style="width:auto;font-size:12px;padding:7px 12px">Add to my extra</button></div></div>`).join('')}</div>`
 :'<div class="empty" style="padding:18px 0;font-size:13px">Nothing is over budget or above your average last month.</div>'}
-<div class="card" style="padding:12px 14px;margin-top:12px"><label class="field" style="margin:0"><div>Exchange rate used (₹ per $)</div><input id="wfx" class="num" inputmode="decimal" value="${p.fx}"></label><div class="muted" style="font-size:11px;margin-top:6px">Taken from your latest India transfer. Edit it if you prefer a different rate.</div></div>
+<div class="card" style="padding:12px 14px;margin-top:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">Exchange rate · ₹${p.fx} per $</div>
+<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['transfer','My last transfer'],['live','Live market'],['manual','I set it']].map(([v,l])=>`<button data-fxm="${v}" class="${fxSource()===v?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div>
+<div class="muted num" style="font-size:11px;margin-top:8px">${lastTransferFx()?`Your last transfer: ₹${lastTransferFx()}`:'No India transfer recorded yet'}${D.settings.fxLive?` · market ₹${D.settings.fxLive}${D.settings.fxLiveAt?' ('+dlabel(D.settings.fxLiveAt)+')':''}`:''}</div>
+${fxSource()==='manual'?`<label class="field" style="margin:10px 0 0"><div>Your rate (₹ per $)</div><input id="wfx" class="num" inputmode="decimal" value="${D.settings.fx||p.fx}"></label>`:''}
+${fxSource()==='live'?`<button class="btn" id="wfxFetch" style="margin-top:10px"${st.fxBusy?' disabled':''}>${st.fxBusy?'Fetching…':"Fetch today's rate"}</button>`:''}
+${st.fxMsg?`<div class="muted" style="font-size:11px;margin-top:8px">${esc(st.fxMsg)}</div>`:''}
+<div class="muted" style="font-size:11px;margin-top:8px">Your transfer rate includes fees, so it's usually the truest figure for you. The market rate is for reference.</div></div>
 <div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="width:auto">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
 wire(){const $=id=>document.getElementById(id);
 $('wtOk')&&($('wtOk').onclick=()=>{const v=parseFloat($('wt').value.replace(/[^0-9.]/g,''))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();openWealth()});
@@ -1111,7 +1203,13 @@ document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dat
 document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{st.wInv=b.dataset.inv==='true';save();openWealth()});
 $('wx')&&($('wx').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'')},$('wx').onchange=e=>{st.wExtra=parseFloat(e.target.value)||0;save();openWealth()});
 document.querySelectorAll('[data-cut]').forEach(b=>b.onclick=()=>{st.wExtra=Math.round(((+st.wExtra||0)+ +b.dataset.cut)*100)/100;save();openWealth();toast('Added '+money(+b.dataset.cut,0,'INR')+' to your extra')});
-$('wfx')&&($('wfx').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){st.fx=v;save();openWealth()}});
+document.querySelectorAll('[data-wcur]').forEach(b=>b.onclick=()=>{st.wCur=b.dataset.wcur;save();openWealth()});
+document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';save();openWealth()});
+$('wfx')&&($('wfx').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){st.fx=v;st.fxMode='manual';save();openWealth()}});
+$('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';save();openWealth();
+try{const r=await fetchFx('USD','INR');st.fxLive=+r.toFixed(2);st.fxLiveAt=today();st.fxMsg=`Market rate ₹${st.fxLive} per $.${lastTransferFx()?` You last converted at ₹${lastTransferFx()}.`:''}`}
+catch(e){st.fxMsg="Couldn't reach a rate service — set it yourself instead."}
+st.fxBusy=false;save();openWealth()});
 $('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;save();openWealth()});
 $('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wExtra;save();sheet=null;render()});
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
