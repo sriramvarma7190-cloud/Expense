@@ -22,13 +22,14 @@ html[data-theme=dark] .track,html[data-theme=dark] .ybars .m i.z{background:#232
 .logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;padding:5px;box-sizing:border-box}
 .logo img.plain{background:transparent;padding:7px}
 .logo.ok span,.logo:has(img) span{visibility:hidden}
-#menuBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));right:14px;z-index:30;width:38px;height:38px;border-radius:19px;border:1px solid var(--line);background:var(--sf);color:var(--ink);font-size:20px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+#menuBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));right:14px;z-index:30;transition:opacity .15s;width:38px;height:38px;border-radius:19px;border:1px solid var(--line);background:var(--sf);color:var(--ink);font-size:20px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .menu .row{padding:14px 16px}
 .menu .row .t{font-weight:500}
 .sw{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
 .sw button{width:34px;height:34px;border-radius:17px;border:3px solid transparent;cursor:pointer}
 .sw button.on{border-color:var(--ink)}
 #lock[hidden]{display:none}
+body.sheetopen #menuBtn{opacity:0;pointer-events:none}
 #lock{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px}
 .dots{display:flex;gap:14px;height:16px}
 .dots i{width:14px;height:14px;border-radius:7px;border:2px solid var(--ink2)}
@@ -51,6 +52,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom));min-height:100vh;mi
 .sec{display:flex;justify-content:space-between;align-items:baseline;margin:26px 4px 8px;font-size:15px;font-weight:600}
 .sec .r{font-size:12px;font-weight:500;color:var(--ink2)}
 .row{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.row[data-txn]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .row:last-child{border-bottom:0}
 .row .main{flex:1;min-width:0}
 .row .t{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -168,7 +170,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.5 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.6 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -376,7 +378,7 @@ const tot=(o,cls,sg)=>Object.entries(o).map(([c,v])=>`<span class="${cls}">${sg}
 return`${SEL?`<div class="card" style="padding:10px 14px;margin-bottom:10px;background:var(--mvS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--mv)">${SEL.length} selected${(()=>{const by={};SEL.map(id=>D.txns.find(t=>t.id===id)).filter(Boolean).forEach(t=>{const cc=cur(acct(t.accountId));by[cc]=(by[cc]||0)+t.amount});const parts=Object.entries(by).map(([cc,v])=>money(v,0,cc));return parts.length?' · '+parts.join(' · '):''})()}</span><button class="link" id="selCancel" style="font-size:12px">Cancel</button></div>
 <div class="tools" style="margin-top:8px">${SEL.length?`<button class="btn" id="selCat" style="width:auto;font-size:12px;padding:7px 12px">Change category</button><button class="btn" id="selOne" style="width:auto;font-size:12px;padding:7px 12px">Mark one-off</button><button class="btn d" id="selDel" style="width:auto;font-size:12px;padding:7px 12px;margin:0">Delete</button>`:'<span class="muted" style="font-size:12px">Tap rows to select them.</span>'}</div></div>`:''}
 ${BACK&&!SEL?`<button class="link" id="backBtn" style="font-size:13px;padding:0 0 6px">‹ Back to ${BACK.tab==='reports'?'reports':BACK.tab==='home'?'home':BACK.tab}</button>`:''}
-<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Activity</div></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline"><div class="h1">Activity</div>${SEL?'':`<button class="link" id="selStart" style="font-size:13px">Select</button>`}</div>
 ${F.all?'':curToggle()}<input id="q" value="${esc(F.q)}" placeholder="Search notes, categories, accounts" style="margin-top:10px;font-size:14px;padding:9px 12px">
 ${(()=>{const rec=(D.recent||[]),sav=(D.saved||[]);if(!rec.length&&!sav.length)return'';
 return`<div style="margin-top:8px">${sav.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Saved</div><div class="chips" style="margin-bottom:8px">${sav.map((f,i)=>`<button type="button" data-sf="${i}" style="background:var(--mvS);border-color:var(--mvBd);color:var(--mv)">${esc(fLabel(f))}</button>`).join('')}</div>`:''}
@@ -431,12 +433,13 @@ document.querySelectorAll('nav [data-tab]').forEach(b=>b.classList.toggle('on',b
 if(tab==='reports')wireReports(v);
 v.querySelectorAll('[data-acct]').forEach(el=>el.onclick=()=>{const a=acct(el.dataset.acct);isInvest(a)?openInvestDetail(a):isLoan(a)?openLoanDetail(a):isCard(a)?openCardDetail(a):isPerson(a)?openPerson(a):openAccount(a)});
 v.querySelectorAll('[data-txn]').forEach(el=>{const id=el.dataset.txn;
-if(SEL){if(SEL.includes(id))el.style.background='var(--mvS)';el.onclick=()=>{const i=SEL.indexOf(id);if(i>=0)SEL.splice(i,1);else SEL.push(id);render()};return}
+if(SEL){const on=SEL.includes(id);if(on)el.style.background='var(--mvS)';const bx=document.createElement('div');bx.textContent=on?'☑':'☐';bx.style.cssText='width:22px;font-size:17px;color:'+(on?'var(--accent)':'var(--ink3)')+';flex:none';el.insertBefore(bx,el.firstChild);el.onclick=()=>{const i=SEL.indexOf(id);if(i>=0)SEL.splice(i,1);else SEL.push(id);render()};return}
 el.onclick=()=>openTxn(D.txns.find(t=>t.id===id));
-let timer=null;const start=()=>{timer=setTimeout(()=>{SEL=[id];render()},500)};const stop=()=>clearTimeout(timer);
+let timer=null;const start=()=>{timer=setTimeout(()=>{SEL=[id];if(navigator.vibrate)navigator.vibrate(10);render()},350)};const stop=()=>clearTimeout(timer);
 el.addEventListener('touchstart',start,{passive:true});el.addEventListener('touchend',stop);el.addEventListener('touchmove',stop);
 el.addEventListener('mousedown',start);el.addEventListener('mouseup',stop);el.addEventListener('mouseleave',stop)});
 v.querySelector('#selCancel')?.addEventListener('click',()=>{SEL=null;render()});
+v.querySelector('#selStart')?.addEventListener('click',()=>{SEL=[];render()});
 v.querySelector('#selDel')?.addEventListener('click',()=>{if(!confirm(`Delete ${SEL.length} transaction${SEL.length===1?'':'s'}? This cannot be undone.`))return;D.txns=D.txns.filter(t=>!SEL.includes(t.id));SEL=null;save();toast('Deleted')});
 v.querySelector('#selOne')?.addEventListener('click',()=>{D.txns.forEach(t=>{if(SEL.includes(t.id))t.oneOff=true});SEL=null;save();toast('Marked as one-off')});
 v.querySelector('#selCat')?.addEventListener('click',()=>{const cc=cur(acct(D.txns.find(t=>t.id===SEL[0])?.accountId))||baseCur();
@@ -448,10 +451,11 @@ v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.datase
 if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name,split:!!r.who,who:r.who||[]},()=>{r.posted=r.posted||[];r.posted.push(m)})});
 v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('card:')||id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast('Hidden for '+mlabel(m).split(' ')[0]);return}
 if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
-const q=v.querySelector('#q');if(q){q.onchange=()=>rememberSearch();q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
-v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
+const q=v.querySelector('#q');if(q){clearTimeout(window._qt);q.oninput=e=>{F.q=e.target.value;clearTimeout(window._qt);window._qt=setTimeout(()=>{rememberSearch()},900);const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
+v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;rememberSearch();render()});
 v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;rememberSearch();render()});
 v.querySelector('#backBtn')?.addEventListener('click',goBack);
+v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>applyFilter((D.recent||[])[+b.dataset.rf]));
 v.querySelectorAll('[data-sf]').forEach(b=>b.onclick=()=>applyFilter((D.saved||[])[+b.dataset.sf]));
 v.querySelector('#saveF')?.addEventListener('click',()=>{const k=fKey();const cur2=(D.saved||[]);const had=cur2.some(x=>JSON.stringify(x)===k);
@@ -469,7 +473,7 @@ renderSheet()}
 
 // ---------- sheets ----------
 function closeSheet(){sheet=null;renderSheet()}
-function renderSheet(){const el=document.getElementById('sheet');if(!sheet){el.innerHTML='';return}
+function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';return}
 const prevBox=el.querySelector('.sheet');const prevTop=prevBox?prevBox.scrollTop:null;const af=document.activeElement;const afId=af&&af.id?af.id:null;const afPos=af&&af.selectionStart!=null?af.selectionStart:null;
 el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip"></div><div class="head"><b>${sheet.title}</b><button id="cancel">Cancel</button></div>${sheet.body()}</div></div>`;
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')closeSheet()};
@@ -802,14 +806,14 @@ ${years.length>1?`<div class="sec">All years</div><div class="card"><table class
 function wireReports(v){v.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=>{R.month=shiftMonth(R.month,+b.dataset.mo);render()});
 v.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{R.month=b.dataset.jump;render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{R.month=b.dataset.year+R.month.slice(4);render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';rememberSearch();render();window.scrollTo(0,0)});
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelector('#chartMode')?.addEventListener('click',()=>{R.chartMode=(R.chartMode||'flow')==='flow'?'cat':'flow';render()});
 v.querySelector('#chartSpan')?.addEventListener('click',()=>{R.chartAll=!R.chartAll;render()});
 v.querySelectorAll('[data-catrange]').forEach(b=>b.onclick=()=>{R.catRange=b.dataset.catrange;render()});
 v.querySelectorAll('[data-catrow]').forEach(b=>b.onclick=()=>{R.catOpen=R.catOpen===b.dataset.catrow?null:b.dataset.catrow;render()});
 v.querySelectorAll('[data-catjump]').forEach(b=>b.onclick=e=>{e.stopPropagation();markBack();F={q:'',acct:'all',type:'expense',cat:b.dataset.catname,month:b.dataset.catjump,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';rememberSearch();render();window.scrollTo(0,0)});
 v.querySelector('#pickMonth')?.addEventListener('click',openMonthPicker);
 v.querySelector('#setBud')?.addEventListener('click',openBudget);v.querySelector('#openGoals')?.addEventListener('click',openGoals);v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)))}
 
@@ -1756,8 +1760,8 @@ $('rsFile').onclick=()=>$('rsFileIn').click();$('rsFileIn').onchange=e=>{const f
 $('ok').onclick=()=>{if(!parsed)return;if(D.txns.length&&!confirm(`Replace the ${D.txns.length} transactions already here?`))return;D={accounts:parsed.accounts,txns:parsed.txns,budgets:parsed.budgets||{},cats:parsed.cats||{},goals:parsed.goals||[],groups:parsed.groups||[],recurring:parsed.recurring||[],settings:{...(parsed.settings||{}),pinHash:D.settings.pinHash}};migrateCats();applyTheme();sheet=null;save();toast('Restored')}}};renderSheet()}
 
 // ---------- nav ----------
-document.querySelectorAll('nav [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();window.scrollTo(0,0)});
-document.getElementById('plus').onclick=()=>openTxn();
+document.querySelectorAll('nav [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;BACK=null;SEL=null;render();window.scrollTo(0,0)});
+document.getElementById('plus').onclick=()=>{SEL=null;openTxn()};
 document.getElementById('menuBtn').onclick=openMenu;
 (async()=>{try{const r=await fetch(location.pathname.replace(/[^/]*$/,'')+'index.html?probe='+Date.now(),{cache:'reload'});const txt=await r.text();const m=txt.match(/VERSION='([^']+)'/);
 if(m&&m[1]!==VERSION){const el=document.createElement('div');el.style.cssText='position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));background:var(--accent);color:#fff;padding:12px 14px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center';
