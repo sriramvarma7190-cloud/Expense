@@ -125,6 +125,24 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 .ybars .m i.z{background:var(--line)}
 .ylab{display:flex;gap:4px;padding:6px 12px 10px;font-size:10px;color:var(--ink3)}
 .ylab span{flex:1;text-align:center}
+.pbars{display:flex;align-items:flex-end;gap:6px;height:140px;padding:12px 12px 0}
+.pbars .m{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;cursor:pointer;gap:0}
+.pbars .pair{display:flex;gap:2px;align-items:flex-end;height:100%;justify-content:center}
+.pbars .pair i{display:block;width:7px;border-radius:3px 3px 0 0;min-height:2px}
+.pbars .pair i.sp{background:var(--out)}
+.pbars .pair i.in{background:var(--in)}
+.pbars .m.on .pair i{outline:1.5px solid var(--ink);outline-offset:1px}
+.stack{display:flex;align-items:flex-end;gap:6px;height:140px;padding:12px 12px 0}
+.stack .m{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;cursor:pointer}
+.stack .m b{display:block;width:100%}
+.stack .m b:first-child{border-radius:3px 3px 0 0}
+.nw{width:100%;height:120px;display:block}
+.mrow{padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.mrow:last-child{border-bottom:0}
+.mrow .top{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.mrow .sub{font-size:12px;color:var(--ink3);margin-top:2px}
+.lg{display:flex;gap:14px;font-size:11px;color:var(--ink2);padding:0 12px 2px}
+.lg s{display:inline-block;width:9px;height:9px;border-radius:2px;text-decoration:none}
 .tbl{width:100%;border-collapse:collapse;font-size:14px}
 .tbl td{padding:9px 16px;border-bottom:1px solid var(--line)}
 .tbl tr:last-child td{border-bottom:0}
@@ -150,7 +168,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.1 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.2 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -666,6 +684,9 @@ const remainingIn=(m,c)=>inflowIn(m,c)-spentIn(m,c)-sentIn(m,c);
 const catSpendRange=(rng,c)=>{const o={};D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(rng==='all'||inRange(t.date,rng))).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+t.amount});return o};
 const monthsWithData=(rng,c)=>new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(rng==='all'||inRange(t.date,rng))).map(t=>mk(t.date))).size;
 
+function p_nw(){const b=balances();let v=0;const c=R.cur;D.accounts.forEach(a=>{if(cur(a)!==c)return;
+if(isLoan(a)||isCard(a))v-= (isCard(a)&&a.closeDay?cardState(a).total:-b[a.id]);
+else if(isInvest(a))v+=(investValue(a)??holdings(a).net);else v+=b[a.id]});return v}
 function reports(){const curs=[...new Set(D.accounts.map(cur))].sort((x,y)=>x==='USD'?-1:y==='USD'?1:0);if(!curs.length)return`<div class="h1">Reports</div><div class="empty">Add an account and a few transactions first.</div>`;
 const c=ensureCur(),m=R.month;R.year=+m.slice(0,4);const y=R.year;
 const spent=spentIn(m,c),inflow=inflowIn(m,c),recv=receivedIn(m,c),sent=sentIn(m,c),prev=spentIn(shiftMonth(m,-1),c),remaining=remainingIn(m,c),saved=savedIn(m,c);
@@ -689,14 +710,51 @@ ${fxSection(c,y)}
 ${brows||'<div class="empty" style="padding:28px 0">No spending in this month yet.</div>'}</div>
 <div class="sec"><span>${y}</span><span class="r num"><span class="out">−${money(ySpent,0,c)}</span>&nbsp;&nbsp;<span class="in">+${money(yIn,0,c)}${receivedIn(String(y),c)>0?' in':''}</span>${ySent?`&nbsp;&nbsp;<span class="mv">↗ ${money(ySent,0,c)}</span>`:''}</span></div>
 <div class="muted num" style="margin:-4px 4px 8px">Remaining in ${y}: <b style="color:${yRem>=0?'var(--in)':'var(--out)'}">${money(yRem,0,c)}</b></div>
-<div class="card"><div class="ybars">${ms.map(x=>`<div class="m" data-jump="${x.k}" title="${mlabel(x.k)}: ${money(x.v,0,c)}"><i class="${x.k===m?'on':''}${x.v===0?' z':''}" style="height:${Math.round(x.v/max*100)}%"></i></div>`).join('')}</div><div class="ylab">${ms.map(x=>`<span>${'JFMAMJJASOND'[+x.k.slice(5)-1]}</span>`).join('')}</div>
-<table class="tbl">${ms.filter(x=>x.v>0||inflowIn(x.k,c)>0).map(x=>`<tr data-jump="${x.k}" style="cursor:pointer"><td>${mlabel(x.k).split(' ')[0]}</td><td class="num out">−${money(x.v,0,c)}</td><td class="num in">+${money(inflowIn(x.k,c),0,c)}</td><td class="num" style="color:${remainingIn(x.k,c)>=0?'var(--in)':'var(--out)'}">${money(remainingIn(x.k,c),0,c)}</td></tr>`).join('')}</table></div>
+${(()=>{const c2=c;const cats2=[...new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c2)&&t.date.startsWith(String(y))).map(t=>t.category||'Other'))];
+const data=ms.map(x=>({k:x.k,sp:x.v,in:inflowIn(x.k,c2),net:remainingIn(x.k,c2)}));
+const live=data.filter(d=>d.sp>0||d.in>0);
+const showAll=R.chartAll===true;const shown=(live.length>6&&!showAll)?live.slice(-6):live;
+const mode=R.chartMode||'flow';
+const max=Math.max(...shown.map(d=>Math.max(d.sp,d.in)),1);
+const catCols=['var(--mv)','var(--out)','var(--in)','#EDA100','#7E22CE','#0F766E'];
+const stackOf=m=>{const o={};D.txns.forEach(t=>{if(t.type!=='expense'||!inCur(t,c2)||mk(t.date)!==m)return;const k2=t.category||'Other';o[k2]=(o[k2]||0)+t.amount});return o};
+const smax=Math.max(...shown.map(d=>d.sp),1);
+const f2=v=>money(v,0,c2);
+if(!live.length)return'';
+if(live.length===1){const only=live[0];const o=stackOf(only.k);const e=Object.entries(o).sort((x,z)=>z[1]-x[1]);const tot=e.reduce((a2,[,v])=>a2+v,0)||1;
+return`<div class="card"><div class="muted" style="font-size:12px;padding:12px 14px 4px">${mlabel(only.k)} by category — the chart appears once you have two months</div>
+${e.map(([k2,v],i)=>`<div class="brow" data-cat="${esc(k2)}" style="cursor:pointer;padding:8px 14px"><div class="l"><span>${esc(k2)}</span><span class="num">${f2(v)}</span></div><div class="track"><i style="width:${Math.round(v/tot*100)}%;background:${catCols[i%catCols.length]}"></i></div></div>`).join('')}
+<div class="mrow" style="border-top:1px solid var(--line)"><div class="top"><span>${mlabel(only.k).split(' ')[0]}</span><span class="num" style="color:${only.net>=0?'var(--in)':'var(--out)'}">${f2(only.net)}</span></div><div class="sub num">−${f2(only.sp)} spent · +${f2(only.in)} in</div></div></div>`}
+return`<div class="card">
+<div class="l" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px 2px">
+<div class="lg">${mode==='flow'?`<span><s style="background:var(--out)"></s> Spent</span><span><s style="background:var(--in)"></s> In</span>`:Object.keys(stackOf(shown[shown.length-1].k)).slice(0,4).map((k2,i)=>`<span><s style="background:${catCols[i%catCols.length]}"></s> ${esc(k2)}</span>`).join('')}</div>
+<button class="link" id="chartMode" style="font-size:11px">${mode==='flow'?'By category ›':'Spent vs in ›'}</button></div>
+${mode==='flow'?`<div class="pbars">${shown.map(d=>`<div class="m ${d.k===m?'on':''}" data-jump="${d.k}" title="${mlabel(d.k)}"><div class="pair"><i class="sp" style="height:${Math.round(d.sp/max*100)}%"></i><i class="in" style="height:${Math.round(d.in/max*100)}%"></i></div></div>`).join('')}</div>`
+:`<div class="stack">${shown.map(d=>{const o=stackOf(d.k);const e=Object.entries(o).sort((x,z)=>z[1]-x[1]).slice(0,6);const h=d.sp/smax*100;
+return`<div class="m" data-jump="${d.k}" title="${mlabel(d.k)}" style="height:100%"><div style="height:${Math.round(100-h)}%"></div>${e.map(([k2,v],i)=>`<b style="height:${Math.round(v/(d.sp||1)*h)}%;background:${catCols[i%catCols.length]}"></b>`).join('')}</div>`}).join('')}</div>`}
+<div class="ylab">${shown.map(d=>`<span>${'JFMAMJJASOND'[+d.k.slice(5)-1]}</span>`).join('')}</div>
+${live.length>6?`<div style="text-align:center;padding:0 0 8px"><button class="link" id="chartSpan" style="font-size:11px">${showAll?'Show last 6 months':'Show the whole year'}</button></div>`:''}
+${(()=>{const pts=[];let acc=0;const hist=live.map(d=>{acc+=d.net;return acc});const base=p_nw();
+const vals=hist.map((h,i)=>base-(hist[hist.length-1]-h));const lo=Math.min(...vals),hi=Math.max(...vals);const sp2=(hi-lo)||1;
+if(vals.length<2)return'';
+const W=300,H=110,pd=10;const xy=i=>[pd+i*(W-2*pd)/(vals.length-1),H-pd-((vals[i]-lo)/sp2)*(H-2*pd)];
+const path=vals.map((_,i)=>xy(i)).map(([x,yy],i)=>(i?'L':'M')+x.toFixed(1)+' '+yy.toFixed(1)).join(' ');
+const area=`${path} L ${(W-pd).toFixed(1)} ${H-pd} L ${pd} ${H-pd} Z`;
+return`<div style="border-top:1px solid var(--line);padding:10px 12px 0"><div class="muted" style="font-size:12px;margin-bottom:2px">Net worth over time</div>
+<svg class="nw" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${area}" fill="var(--mvS)"/><path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/></svg>
+<div class="l" style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);padding:0 0 8px"><span>${mlabel(live[0].k).split(' ')[0]} ${money(vals[0],0,c2)}</span><span>now ${money(vals[vals.length-1],0,c2)}</span></div></div>`})()}
+<div style="border-top:1px solid var(--line)">${[...live].reverse().map(d=>`<div class="mrow" data-jump="${d.k}"><div class="top"><span>${mlabel(d.k).split(' ')[0]}</span><span class="num" style="color:${d.net>=0?'var(--in)':'var(--out)'}">${f2(d.net)}</span></div><div class="sub num">−${f2(d.sp)} spent · +${f2(d.in)} in</div></div>`).join('')}</div></div>`})()}
 ${(()=>{const rng=R.catRange==='all'?'all':String(y);const cs=catSpendRange(rng,c);const tot=Object.values(cs).reduce((a,b)=>a+b,0);const nM=Math.max(1,monthsWithData(rng,c));
 const prevCs=R.catRange==='all'?null:catSpendRange(String(y-1),c);const hasPrev=prevCs&&Object.keys(prevCs).length>0;
 const list=Object.entries(cs).sort((a,b)=>b[1]-a[1]);const top=list[0]?.[1]||1;
 const rows=list.map(([k,v])=>{const open=R.catOpen===k;const pv=hasPrev?(prevCs[k]||0):0;const ch=hasPrev&&pv>0?Math.round((v-pv)/pv*100):null;
 let detail='';if(open){const mm=(R.catRange==='all'?[...new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(t.category||'Other')===k).map(t=>mk(t.date)))].sort():monthsOf(y)).map(mk_=>({k:mk_,v:D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(t.category||'Other')===k&&mk(t.date)===mk_).reduce((a,t)=>a+t.amount,0)}));const mx=Math.max(...mm.map(x=>x.v),1);
-detail=`<div class="ybars" style="height:90px;padding-top:8px">${mm.map(x=>`<div class="m" data-catjump="${x.k}" data-catname="${esc(k)}" title="${mlabel(x.k)}: ${money(x.v,0,c)}"><i class="${x.v===0?'z':''}" style="height:${Math.round(x.v/mx*100)}%;background:var(--mv)"></i></div>`).join('')}</div><div class="ylab">${mm.map(x=>`<span>${R.catRange==='all'?x.k.slice(2).replace('-','/'):'JFMAMJJASOND'[+x.k.slice(5)-1]}</span>`).join('')}</div><div style="padding:0 16px 12px"><button class="link" data-catall="${esc(k)}">See all ${esc(k)} transactions ›</button></div>`}
+const vals=mm.map(x=>x.v);const hi=Math.max(...vals,1);const W=300,H=90,pd=8;
+const xy=i=>[pd+(vals.length===1?(W/2-pd):i*(W-2*pd)/(vals.length-1)),H-pd-(vals[i]/hi)*(H-2*pd)];
+const pth=vals.map((_,i)=>xy(i)).map(([x,yy],i)=>(i?'L':'M')+x.toFixed(1)+' '+yy.toFixed(1)).join(' ');
+detail=`${vals.length>1?`<svg class="nw" style="height:90px" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${pth} L ${(W-pd).toFixed(1)} ${H-pd} L ${pd} ${H-pd} Z" fill="var(--outS)"/><path d="${pth}" fill="none" stroke="var(--out)" stroke-width="2" stroke-linejoin="round"/></svg><div class="ylab">${mm.map(x=>`<span>${R.catRange==='all'?x.k.slice(2).replace('-','/'):'JFMAMJJASOND'[+x.k.slice(5)-1]}</span>`).join('')}</div>`:''}
+<div class="muted num" style="font-size:11px;padding:0 16px 6px">${mm.filter(x=>x.v>0).map(x=>`${mlabel(x.k).split(' ')[0].slice(0,3)} ${money(x.v,0,c)}`).join(' · ')}</div>
+<div style="padding:0 16px 12px"><button class="link" data-catall="${esc(k)}">See all ${esc(k)} transactions ›</button></div>`}
 return`<div class="brow" style="padding:0"><div data-catrow="${esc(k)}" style="padding:11px 16px;cursor:pointer"><div class="l"><span>${esc(k)} <span class="muted" style="font-size:11px">${open?'▾':'›'}</span></span><span class="num"><b>${money(v,0,c)}</b> <span class="muted" style="font-size:12px">${tot?Math.round(v/tot*100):0}%</span></span></div><div class="track"><i style="width:${Math.round(v/top*100)}%;background:var(--out)"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(v/nM,0,c)} avg per month${ch!=null?` · <span style="color:${ch>0?'var(--out)':'var(--in)'}">${ch>0?'+':''}${ch}% vs ${y-1}</span>`:hasPrev&&pv===0?' · new this year':''}</div></div>${detail}</div>`}).join('');
 return`<div class="sec">Spending by category<span class="r"><span class="seg" style="display:inline-grid;grid-template-columns:1fr 1fr;margin:0;padding:2px;vertical-align:middle"><button data-catrange="year" class="${R.catRange==='year'?'on':''}" style="padding:4px 10px;font-size:12px">${y}</button><button data-catrange="all" class="${R.catRange==='all'?'on':''}" style="padding:4px 10px;font-size:12px">All time</button></span></span></div>
 <div class="card">${list.length?`<div class="brow" style="background:var(--bg)"><div class="l"><span><b>Total</b> <span class="muted">across ${nM} month${nM>1?'s':''}</span></span><span class="num"><b>${money(tot,0,c)}</b></span></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(tot/nM,0,c)} avg per month</div></div>${rows}`:`<div class="empty" style="padding:28px 0">No spending recorded ${R.catRange==='all'?'yet':'in '+y}.</div>`}</div>
@@ -708,6 +766,8 @@ function wireReports(v){v.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=
 v.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{R.month=b.dataset.jump;render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{R.month=b.dataset.year+R.month.slice(4);render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
+v.querySelector('#chartMode')?.addEventListener('click',()=>{R.chartMode=(R.chartMode||'flow')==='flow'?'cat':'flow';render()});
+v.querySelector('#chartSpan')?.addEventListener('click',()=>{R.chartAll=!R.chartAll;render()});
 v.querySelectorAll('[data-catrange]').forEach(b=>b.onclick=()=>{R.catRange=b.dataset.catrange;render()});
 v.querySelectorAll('[data-catrow]').forEach(b=>b.onclick=()=>{R.catOpen=R.catOpen===b.dataset.catrow?null:b.dataset.catrow;render()});
 v.querySelectorAll('[data-catjump]').forEach(b=>b.onclick=e=>{e.stopPropagation();F={q:'',acct:'all',type:'expense',cat:b.dataset.catname,month:b.dataset.catjump,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
