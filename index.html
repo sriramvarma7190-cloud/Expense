@@ -146,7 +146,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='7.1 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='7.2 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -304,6 +304,9 @@ const tot=ppl.reduce((x,y)=>x+y.v,0);
 return`<div class="sec">Owed to you<span class="r"><button class="link" id="mgGroups" style="font-size:12px">Groups</button></span></div><div class="card">
 <div class="brow" style="background:var(--bg)"><div class="l"><span><b>${tot>=0?'Owed to you':'You owe'}</b></span><span class="num"><b style="color:${tot>=0?'var(--in)':'var(--out)'}">${money(Math.abs(tot),0,c)}</b></span></div><div class="muted" style="font-size:11px;margin-top:4px">across ${ppl.length||peopleIn(c).length} ${(ppl.length||peopleIn(c).length)===1?'person':'people'}</div></div>
 ${ppl.length?ppl.map(({a,v})=>`<div class="row" data-person="${a.id}">${logoEl(a,32)}<div class="main"><div class="t">${esc(pname(a))}</div><div class="s">${v>=0?'owes you':'you owe'}</div></div><div class="amt num" style="color:${v>=0?'var(--in)':'var(--out)'}">${money(Math.abs(v),0,c)}</div></div>`).join(''):'<div class="empty" style="padding:16px 0;font-size:13px">Everyone is settled up.</div>'}</div>`})()}
+${(()=>{if(!cfgGet())return'';const m=syncMeta();const days=m.at?Math.floor((Date.now()-m.at)/864e5):999;
+if(days<3)return'';
+return`<div class="card" style="margin-bottom:10px;padding:12px 14px;background:var(--outS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="flex:1"><div style="font-weight:500;font-size:14px;color:var(--out)">${m.at?`Last backed up ${days} days ago`:'Not backed up yet'}</div><div class="muted" style="font-size:12px;margin-top:2px">${pass?'Tap to back up now.':'Enter your passphrase to resume backups.'}</div></div><button class="btn" id="staleBk" style="width:auto;padding:9px 14px;font-size:13px">${pass?'Back up':'Open'}</button></div></div>`})()}
 ${transit.length?`<div class="sec">In transit<span class="r">not yet credited</span></div><div class="card">${transit.map(t=>txnRow(t,1)).join('')}</div>`:''}
 <div class="sec">Accounts<span class="r"><button class="link" id="addAcct" style="font-size:12px">Add account</button></span></div>
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
@@ -344,6 +347,7 @@ function render(){const v=document.getElementById('view');if(tab==='accounts')ta
 v.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{R.cur=b.dataset.rc;localStorage.setItem('ledger-cur',R.cur);F.acct='all';render()});
 v.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>openPerson(acct(b.dataset.person)));
 v.querySelector('#mgGroups')?.addEventListener('click',()=>openGroups(ensureCur()));
+v.querySelector('#staleBk')?.addEventListener('click',()=>{if(pass&&FBuser)cloudPush();else openCloud()});
 v.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>{R.open[b.dataset.grp]=!R.open[b.dataset.grp];render()});
 v.querySelectorAll('[data-tab-go]').forEach(b=>b.onclick=()=>{tab=b.dataset.tabGo;render();window.scrollTo(0,0)});
 v.querySelector('#addGoal')?.addEventListener('click',()=>openGoalEdit());
@@ -1010,11 +1014,11 @@ document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTx
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
 // ---------- cloud sync (Firebase + passphrase) ----------
-const CFG_KEY='ledger-fb';const SYNC_KEY='ledger-sync';
+const CFG_KEY='ledger-fb';const SYNC_KEY='ledger-sync';const PW_KEY='ledger-pw';
 const cfgGet=()=>{try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null')}catch{return null}};
 const syncMeta=()=>{try{return JSON.parse(localStorage.getItem(SYNC_KEY)||'{}')}catch{return{}}};
 const syncSet=o=>localStorage.setItem(SYNC_KEY,JSON.stringify({...syncMeta(),...o}));
-let FB=null,FBuser=null,pass=null,syncBusy=false;
+let FB=null,FBuser=null,pass=(localStorage.getItem(PW_KEY)||null),syncBusy=false;
 async function fbInit(){const cfg=cfgGet();if(!cfg)throw new Error('Cloud sync is not set up yet');if(FB)return FB;
 const [app,auth,fs]=await Promise.all([
 import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
@@ -1028,7 +1032,7 @@ async function fbSignIn(){const{A,auth}=await fbInit();const p=new A.GoogleAuthP
 try{const r=await A.signInWithPopup(auth,p);FBuser=r.user}
 catch(e){if(/popup|blocked|closed/i.test(e.message||'')){await A.signInWithRedirect(auth,p);return}throw e}
 return FBuser}
-async function fbSignOut(){const{A,auth}=await fbInit();await A.signOut(auth);FBuser=null;pass=null}
+async function fbSignOut(){const{A,auth}=await fbInit();await A.signOut(auth);FBuser=null;pass=null;localStorage.removeItem(PW_KEY)}
 const enc=new TextEncoder(),dec=new TextDecoder();
 const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
 const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -1073,7 +1077,8 @@ return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Last backup</span><span class="muted">${m.at?dlabel(new Date(m.at).toISOString().slice(0,10))+' '+new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'never'}</span></div>
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Encryption</span><span class="muted">${pass?'passphrase set':'not unlocked'}</span></div></div>
 ${FBuser?`<label class="field"><div>Passphrase <span class="muted">(encrypts before it leaves this phone)</span></div><input id="pw" type="password" value="${pass?'':''}" placeholder="${pass?'••••••••':'Choose or enter yours'}"></label>
-<div class="muted" style="font-size:11px;margin:-6px 0 12px">Use the same passphrase on every device. Lose it and the cloud copy can't be opened — your device copy is unaffected.</div>
+<label class="field" style="display:flex;align-items:center;gap:8px;margin:-6px 0 6px"><input type="checkbox" id="pwRem" style="width:auto"${localStorage.getItem(PW_KEY)?' checked':''}><span style="font-size:14px">Remember it on this phone</span></label>
+<div class="muted" style="font-size:11px;margin:0 0 12px">${localStorage.getItem(PW_KEY)?'Backups run on their own — no typing. Anyone who unlocks this phone and digs into app storage could read it, so keep your PIN lock on.':"You'll type it once each time you open the app. Turn this on and backups run on their own."} Use the same passphrase on every device; lose it and the cloud copy can't be opened.</div>
 <div class="tools" style="margin:0 0 10px"><button class="btn p" id="pushBtn" style="width:auto">Back up now</button><button class="btn" id="pullBtn" style="width:auto">Restore from cloud</button></div>
 <button class="btn" id="outBtn">Sign out</button>`
 :`<button class="btn p" id="inBtn">Sign in with Google</button>`}
@@ -1090,7 +1095,8 @@ const o=JSON.parse(body);
 if(!o.apiKey||!o.projectId)throw new Error('Missing apiKey or projectId');
 localStorage.setItem(CFG_KEY,JSON.stringify(o));toast('Setup saved');openCloud()}
 catch(e){$('cfgMsg').textContent="Couldn't read that config ("+(e.message||'')+"). Paste the whole snippet from Firebase — comments and extra lines are fine."}});
-$('pw')&&($('pw').oninput=e=>{pass=e.target.value||null});
+$('pw')&&($('pw').oninput=e=>{pass=e.target.value||null;if(pass&&localStorage.getItem(PW_KEY)!==null)localStorage.setItem(PW_KEY,pass)});
+$('pwRem')&&($('pwRem').onchange=e=>{if(e.target.checked){if(!pass)return toast('Type the passphrase first'),renderSheet();localStorage.setItem(PW_KEY,pass);toast('Saved on this phone')}else{localStorage.removeItem(PW_KEY);toast('Forgotten — you will type it each session')}renderSheet()});
 $('inBtn')&&($('inBtn').onclick=async()=>{try{await fbSignIn();renderSheet();toast('Signed in')}catch(e){toast('Sign-in failed: '+(e.message||''))}});
 $('outBtn')&&($('outBtn').onclick=async()=>{try{await fbSignOut();renderSheet()}catch(e){toast('Error: '+(e.message||''))}});
 $('pushBtn')&&($('pushBtn').onclick=async()=>{if(!pass&&!confirm('No passphrase set — the backup will be stored unencrypted. Continue?'))return;await cloudPush()});
@@ -1100,7 +1106,7 @@ if(!confirm(`Replace everything on this device with the cloud copy?\n\nCloud sav
 D={accounts:parsed.accounts,txns:parsed.txns,budgets:parsed.budgets||{},cats:parsed.cats||{},goals:parsed.goals||[],groups:parsed.groups||[],recurring:parsed.recurring||[],settings:{...(parsed.settings||{}),pinHash:D.settings.pinHash}};
 migrateCats();applyTheme();syncSet({at:updatedAt});sheet=null;save();toast('Restored from cloud')}
 catch(e){toast(e.message||'Restore failed')}});
-$('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup from this device? Your data stays here.'))return;localStorage.removeItem(CFG_KEY);localStorage.removeItem(SYNC_KEY);FB=null;FBuser=null;pass=null;openCloud()});
+$('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup from this device? Your data stays here.'))return;localStorage.removeItem(CFG_KEY);localStorage.removeItem(SYNC_KEY);localStorage.removeItem(PW_KEY);FB=null;FBuser=null;pass=null;openCloud()});
 }};renderSheet();
 if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
 
@@ -1157,7 +1163,7 @@ if(m&&m[1]!==VERSION){const el=document.createElement('div');el.style.cssText='p
 el.innerHTML='<span style="flex:1">Version '+m[1].split(' ')[0]+' is available.</span><button style="background:#fff;color:var(--accent);border:0;border-radius:8px;padding:7px 12px;font:inherit;font-weight:600">Update</button>';
 el.querySelector('button').onclick=()=>{location.replace(location.pathname+'?v='+Date.now())};document.body.appendChild(el)}}catch(e){}})();
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
-try{migrateCats();applyTheme();render();if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
+try{migrateCats();applyTheme();render();if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
 </script>
 </body>
 </html>
