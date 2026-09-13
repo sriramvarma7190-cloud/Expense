@@ -164,22 +164,22 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 </style>
 </head>
 <body>
-<button id="menuBtn" aria-label="Menu">⋯</button>
+<button id="menuBtn" hidden aria-label="Menu">⋯</button>
 <div id="lock" hidden></div>
 <div class="wrap" id="view"></div>
 <nav><div class="in-">
   <button data-tab="home">Home</button>
   <button data-tab="activity">Activity</button>
   <button class="plus" id="plus" aria-label="Add">+</button>
-  <button data-tab="goals">Goals</button>
-  <button data-tab="reports">Reports</button>
+  
+  <button data-tab="reports">Reports</button><button data-tab="menu">Menu</button>
 </div></nav>
 <div id="sheet"></div>
 <div id="toast"></div>
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.12 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='10.0 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -326,6 +326,15 @@ const conv=(typeof F!=='undefined'&&F.all&&f&&cur(f)!==baseCur())?`<small class=
 return`<div class="row" data-txn="${t.id}"><div class="bar" style="background:${soft}"><i style="background:${hard}"></i></div><div class="main"><div class="t" style="font-weight:500">${esc(title)}</div><div class="s">${showDate?dlabel(t.date)+' · ':''}${esc(sub)}</div></div><div class="amt num ${cls}">${amt}${conv}</div></div>`}
 
 // ---------- views ----------
+function noticeTrim(){return''}
+function trimNotices(v){const box=v.querySelector('#notices');if(!box)return;
+const cards=[...box.children].filter(el=>el.nodeType===1&&el.textContent.trim());
+if(cards.length<=2){box.nextElementSibling&&0;return}
+const hidden=cards.slice(2);if(!NOTICEOPEN)hidden.forEach(el=>el.style.display='none');
+const bar=document.createElement('div');bar.className='card';bar.style.cssText='margin-bottom:10px;padding:11px 14px;cursor:pointer';
+bar.innerHTML='<div class="l" style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span class="muted">'+(NOTICEOPEN?'Show fewer':hidden.length+' more need attention')+'</span><span class="link" style="font-size:13px">'+(NOTICEOPEN?'Hide':'Show')+' \u203a</span></div>';
+bar.onclick=()=>{NOTICEOPEN=!NOTICEOPEN;render()};
+box.appendChild(bar)}
 function home(){const b=balances();
 if(!D.accounts.length)return`<div style="padding:44px 4px;text-align:center"><div class="h1">Start with an account</div><p class="muted" style="max-width:360px;margin:10px auto 24px;line-height:1.5;font-size:14px">Add your checking, savings, and credit cards from every bank. Then log what you spend and move money between them.</p><button class="btn p" id="addAcct" style="width:auto">Add first account</button></div>`;
 const c=ensureCur();const m=mk(today());const as=D.accounts.filter(a=>cur(a)===c);
@@ -351,7 +360,7 @@ const tot=ppl.reduce((x,y)=>x+y.v,0);
 return`<div class="sec">Owed to you<span class="r"><button class="link" id="mgGroups" style="font-size:12px">Groups</button></span></div><div class="card">
 <div class="brow" style="background:var(--bg)"><div class="l"><span><b>${tot>=0?'Owed to you':'You owe'}</b></span><span class="num"><b style="color:${tot>=0?'var(--in)':'var(--out)'}">${money(Math.abs(tot),0,c)}</b></span></div><div class="muted" style="font-size:11px;margin-top:4px">across ${ppl.length||peopleIn(c).length} ${(ppl.length||peopleIn(c).length)===1?'person':'people'}</div></div>
 ${ppl.length?ppl.map(({a,v})=>`<div class="row" data-person="${a.id}">${logoEl(a,32)}<div class="main"><div class="t">${esc(pname(a))}</div><div class="s">${v>=0?'owes you':'you owe'}</div></div><div class="amt num" style="color:${v>=0?'var(--in)':'var(--out)'}">${money(Math.abs(v),0,c)}</div></div>`).join(''):'<div class="empty" style="padding:16px 0;font-size:13px">Everyone is settled up.</div>'}</div>`})()}
-${(()=>{const last=reviewDue();if(!last)return'';const c2=ensureCur();
+<div id="notices">${(()=>{const last=reviewDue();if(!last)return'';const c2=ensureCur();
 const sp=spentIn(last,c2),prev=spentIn(shiftMonth(last,-1),c2),kept=remainingIn(last,c2);
 const delta=prev>0?Math.round((sp-prev)/prev*100):null;
 const oo=D.txns.filter(t=>t.type==='expense'&&mk(t.date)===last&&inCur(t,c2)).sort((a,b)=>b.amount-a.amount)[0];
@@ -371,12 +380,22 @@ ${first.txns.slice(0,2).map(t=>`<div class="l" style="display:flex;justify-conte
 ${(()=>{if(!cfgGet())return'';const m=syncMeta();const days=m.at?Math.floor((Date.now()-m.at)/864e5):999;
 if(days<3)return'';
 return`<div class="card" style="margin-bottom:10px;padding:12px 14px;background:var(--outS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="flex:1"><div style="font-weight:500;font-size:14px;color:var(--out)">${m.at?`Last backed up ${days} days ago`:'Not backed up yet'}</div><div class="muted" style="font-size:12px;margin-top:2px">${pass?'Tap to back up now.':'Enter your passphrase to resume backups.'}</div></div><button class="btn" id="staleBk" style="width:auto;padding:9px 14px;font-size:13px">${pass?'Back up':'Open'}</button></div></div>`})()}
+</div>${noticeTrim()}
+${(()=>{const gl=D.goals.filter(g=>g.currency===c);const wt=targetIn(c);
+if(!wt&&!gl.length)return`<div class="sec" style="padding-right:46px">Goals<span class="r"><button class="link" id="addGoalH">Create goal</button></span></div>
+<div class="card"><div class="empty" style="padding:22px 16px;font-size:13px;text-align:center">No goals yet<div class="muted" style="font-size:12px;margin-top:4px">Name an amount and a date; the app works out the monthly figure. Or set a wealth target to see when you reach a number.</div><div class="tools" style="justify-content:center;margin-top:12px"><button class="btn p" id="addGoalE" style="width:auto">Create a goal</button><button class="btn" id="setWealthE" style="width:auto">Wealth target</button></div></div></div>`;
+const wp=wt?project(wt,{window:+(D.settings.wWin||6),includeInvest:D.settings.wInv!==false,extra:(+(D.settings.wExtra||0))+((D.settings.wCuts||[]).reduce((a,x)=>a+(+x.v||0),0))}):null;
+return`<div class="sec" style="padding-right:46px">Goals<span class="r"><button class="link" id="addGoalH">Create goal</button></span></div>
+<div class="card">${wt?`<div class="brow" id="wealthCard" style="cursor:pointer"><div class="l"><span><b>Wealth target</b> <span class="muted" style="font-size:11px">everything you own</span></span><span class="num">${wp.hit==null?'—':mLabel(wp.hit)}</span></div>
+<div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--accent)'}"></i></div>
+<div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,c)} of ${money(wt,0,c)}${wp.debtFree!=null&&wp.debtFree>0?' · debt-free '+mLabel(wp.debtFree):''}</div></div>`:''}
+${gl.map(g=>goalCard(g)).join('')}</div>`})()}
 ${transit.length?`<div class="sec">In transit<span class="r">not yet credited</span></div><div class="card">${transit.map(t=>txnRow(t,1)).join('')}</div>`:''}
 <div class="sec" style="padding-right:46px">Accounts<span class="r"><button class="link" id="addAcct" style="font-size:12px">Add account</button></span></div>
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
 
 let F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};
-let BACK=null;let SEL=null;let UNDO=null,UT=null;
+let BACK=null;let SEL=null;let UNDO=null,UT=null;let NOTICEOPEN=false;
 function goBack(){if(!BACK)return;const b=BACK;BACK=null;tab=b.tab;R.cur=b.cur;R.month=b.month||R.month;R.catOpen=b.catOpen;R.chartMode=b.chartMode;F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};render();setTimeout(()=>window.scrollTo(0,b.y||0),0)}
 const clearFilters=()=>{F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false}};
 const markBack=()=>{BACK={tab,cur:R.cur,month:R.month,catOpen:R.catOpen,chartMode:R.chartMode,y:window.scrollY||0}};
@@ -438,14 +457,14 @@ return`<div class="card" style="margin-top:14px">${(()=>{const k=fKey();const on
 ${ys.length>1?`<div class="brow"><div class="muted" style="margin-bottom:6px">By year</div>${ys.map(y=>`<div class="l" style="margin-top:4px"><span>${y}</span><span>${fm(years[y])}</span></div>`).join('')}</div>`:''}
 ${ms.length>1?`<div class="brow"><div class="muted" style="margin-bottom:6px">By month</div>${ms.map(m=>`<div class="l" style="margin-top:4px"><span>${mlabel(m)}</span><span>${fm(months[m])}</span></div>`).join('')}</div>`:''}
 ${ys.length===1&&ms.length===1?'':''}</div>`})()}
-${!list.length?`<div class="empty">${D.txns.length?'Nothing matches these filters.':'No transactions yet. Tap + to log your first one.'}</div>`:''}
+${!list.length?`<div class="empty" style="padding:30px 16px;text-align:center">${D.txns.length?'Nothing matches these filters<div class="muted" style="font-size:12px;margin-top:4px">Try clearing the search or the account filter.</div>':'No transactions yet<div class="muted" style="font-size:12px;margin-top:4px">Tap + to log your first expense, income or transfer.</div>'}</div>`:''}
 ${groups.map(g=>`<div class="sec">${mlabel(g.k)}<span class="r num">${tot(g.out,'out','−')}${Object.keys(g.out).length&&Object.keys(g.inn).length?'&nbsp;&nbsp;':''}${tot(g.inn,'in','+')}</span></div><div class="card">${g.items.map(t=>txnRow(t,1)).join('')}</div>`).join('')}`}
 
 function goalsPage(){const c=ensureCur();const list=D.goals.filter(g=>g.currency===c);
 const wt=+(D.settings.wTarget||0);const wp=wt?project(wt,{window:+(D.settings.wWin||6),includeInvest:D.settings.wInv!==false,extra:(+(D.settings.wExtra||0))+((D.settings.wCuts||[]).reduce((a,x)=>a+(+x.v||0),0))}):null;
 return`<div class="hrow"><div class="h1">Goals</div><button class="link" id="addGoal">Create goal</button></div>
 <div class="card" style="margin-top:14px"><div class="brow" id="wealthCard" style="cursor:pointer"><div class="l"><span><b>${wt?'Wealth target':'Set a wealth target'}</b> <span class="muted" style="font-size:11px">›</span></span><span class="num">${wt?`<b>${wp.hit==null?'—':mLabel(wp.hit)}</b>`:'<span class="muted" style="font-size:13px">when will I get there?</span>'}</span></div>
-${wt?`<div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,baseCur())} of ${money(wt,0,baseCur())} · surplus ${money(wp.save,0,baseCur())}/month${wp.debtFree!=null?' · debt-free '+mLabel(wp.debtFree):''}</div>`:'<div class="muted" style="font-size:11px;margin-top:4px">Uses your real income and spending to work out the date.</div>'}</div></div>
+${wt?`<div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,baseCur())} of ${money(wt,0,baseCur())} · surplus ${money(wp.save,0,baseCur())}/month${wp.debtFree!=null&&wp.debtFree>0?' · debt-free '+mLabel(wp.debtFree):''}</div>`:'<div class="muted" style="font-size:11px;margin-top:4px">Uses your real income and spending to work out the date.</div>'}</div></div>
 ${curToggle()}
 ${list.length?`<div class="card" style="margin-top:14px">${list.map(g=>goalCard(g)).join('')}</div>`:`<div class="empty">No ${c} goals yet.<br><span class="muted" style="font-size:13px">A goal counts money you move into the accounts you pick — a savings account or someone holding money for you.</span></div>`}
 ${D.goals.length&&!list.length?`<div class="muted" style="text-align:center">You have ${D.goals.length} goal${D.goals.length>1?'s':''} in another currency.</div>`:''}
@@ -460,10 +479,17 @@ v.querySelector('#revClose')?.addEventListener('click',()=>{D.settings.reviewSee
 v.querySelector('#revOpen')?.addEventListener('click',()=>{const last=reviewDue();markBack();R.month=last;tab='reports';render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-dupdel]').forEach(b=>b.onclick=()=>{const id=b.dataset.dupdel;const gone=D.txns.filter(t=>t.id===id);D.txns=D.txns.filter(t=>t.id!==id);save();render();undoToast('Duplicate removed',()=>{D.txns=D.txns.concat(gone)})});
 v.querySelectorAll('[data-dupok]').forEach(b=>b.onclick=()=>{D.settings.dupOk=[...(D.settings.dupOk||[]),b.dataset.dupok];save();toast('Kept both')});
+trimNotices(v);
+v.querySelector('#wealthCard')?.addEventListener('click',openWealth);
+v.querySelector('#addGoalH')?.addEventListener('click',()=>openGoalEdit());
+v.querySelector('#addGoalE')?.addEventListener('click',()=>openGoalEdit());
+v.querySelector('#setWealthE')?.addEventListener('click',openWealth);
+v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)));
 v.querySelector('#staleBk')?.addEventListener('click',()=>{if(pass&&FBuser)cloudPush();else openCloud()});
 v.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>{R.open[b.dataset.grp]=!R.open[b.dataset.grp];render()});
 v.querySelectorAll('[data-tab-go]').forEach(b=>b.onclick=()=>{tab=b.dataset.tabGo;render();window.scrollTo(0,0)});
 v.querySelector('#addGoal')?.addEventListener('click',()=>openGoalEdit());
+trimNotices(v);
 v.querySelector('#wealthCard')?.addEventListener('click',openWealth);
 document.querySelectorAll('nav [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
 if(tab==='reports')wireReports(v);
@@ -688,7 +714,7 @@ const a=acct(current);
 return`<div class="field"><div>${label}</div><div class="chips" style="margin-top:2px">${chips.map(x=>`<button type="button" data-ac="${fld}|${x.id}" style="display:inline-flex;align-items:center;gap:6px;${x.id===current?'background:var(--mvS);border-color:var(--mvBd);color:var(--mv)':''}">${logoEl(x,18)}${esc(x.name)}</button>`).join('')}<button type="button" data-acmore="${fld}" style="border-style:dashed">${chips.length?'More':'Choose account'} ›</button></div>${a?`<div class="muted" style="font-size:11px;margin-top:4px">${esc(a.name)} · ${cur(a)}${a.bank?' · '+esc(a.bank):''}</div>`:'<div class="muted" style="font-size:11px;margin-top:4px">No account chosen yet</div>'}</div>`}
 
 function openTxn(edit,preset,onSaved){if(!D.accounts.length)return openAccount();if(!edit&&preset)edit=null;const P=preset||{};
-const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,oneOff:!!edit?.oneOff,split:!!(edit?.who&&edit.who.length)||!!P.split,who:edit?.who?[...edit.who]:(P.who?[...P.who]:[]),mode:edit?.smode||'even',amt:edit?.amt?{...edit.amt}:{},pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||D.accounts[0].id,toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
+const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,oneOff:!!edit?.oneOff,more:!!(edit&&(edit.note||edit.oneOff||(edit.who&&edit.who.length))),split:!!(edit?.who&&edit.who.length)||!!P.split,who:edit?.who?[...edit.who]:(P.who?[...P.who]:[]),mode:edit?.smode||'even',amt:edit?.amt?{...edit.amt}:{},pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||D.accounts[0].id,toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
 const fx=()=>st.type==='transfer'&&st.toAccountId&&cur(acct(st.accountId))!==cur(acct(st.toAccountId));
 const valid=()=>{const a=parseFloat(st.amount);if(!(a>0)||!st.accountId)return false;if(st.type==='invest'){const inv=acct(st.toAccountId);return !!inv&&(!usesUnits(inv)||parseFloat(st.units)>0)}return st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId&&(!fx()||parseFloat(st.toAmount)>0))};
 const opts=sel=>D.accounts.map(a=>`<option value="${a.id}"${sel===a.id?' selected':''}>${esc(a.name)}${a.bank?` (${esc(a.bank)})`:''} · ${cur(a)}</option>`).join('');
@@ -707,7 +733,7 @@ ${fx()?`<label class="field"><div>Amount received in ${tc} (${CUR[tc].sym}) — 
 <div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')}; ${money(ta,0,tc)} lands in ${esc(acct(st.toAccountId)?.name||'…')}.${a>0&&ta>0?` Your rate: 1 ${fc} = ${(ta/a).toLocaleString('en-US',{maximumFractionDigits:2})} ${tc}.`:''}</div>`
 :`<div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')} and lands in ${esc(acct(st.toAccountId)?.name||'…')}. Net worth stays the same.</div>`}${st.type==='transfer'&&st.pending?'<div class="note out" >Debited now; the receiving account is credited once you mark it received.</div>':''}`
 :st.type==='invest'?'':`${acctField(st.type==='expense'?'Paid from':'Deposited to','fr',st.accountId,st.type)}
-${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=parseFloat(st.amount)||0;
+<button type="button" class="link" id="moreT" style="display:block;margin:2px 0 12px;font-size:13px">${st.more?"Fewer details":"More details"} › <span class="muted" style="font-size:11px">split, one-off, date, note</span></button><div id="moreBox" style="display:${st.more?"block":"none"}">${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=parseFloat(st.amount)||0;
 const sel=(st.who||[]).filter(id=>acct(id));const mode=st.mode||'even';
 const shares={};if(sel.length){if(mode==='even'){const each=Math.floor(amt/(sel.length+1)*100)/100;sel.forEach(id=>shares[id]=each)}
 else if(mode==='all'){const each=Math.floor(amt/sel.length*100)/100;sel.forEach(id=>shares[id]=each)}
@@ -734,7 +760,7 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><
 <label class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px"><input type="checkbox" id="pend" style="width:auto"${st.pending?' checked':''}><span style="font-size:14px">Not received yet — keep it in transit</span></label>
 <label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Wise, Remitly, purpose…"></label>`
 :`<div class="g2"><label class="field"><div>Date</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Where, what, who"></label></div>`}
-<button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
+</div><button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';renderSheet()});
 $('am').oninput=e=>{st.amount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.amount;re()};$('am').onkeydown=e=>{if(e.key==='Enter')$('ok').click()};
@@ -763,6 +789,7 @@ $('newGrp')&&($('newGrp').onclick=()=>{pullSh();openGroups(cur(acct(st.accountId
 $('ta')&&($('ta').oninput=e=>{st.toAmount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.toAmount;re()});
 $('ta')&&($('ta').onblur=()=>renderSheet());$('am').onblur=()=>{if(fx())renderSheet()};
 document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{st.category=st.category===b.dataset.c?'':b.dataset.c;renderSheet()});
+$('moreT')&&($('moreT').onclick=()=>{st.more=!st.more;renderSheet()});
 $('oneoff')&&($('oneoff').onchange=e=>{st.oneOff=e.target.checked;renderSheet()});
 $('ooYes')&&($('ooYes').onclick=()=>{st.oneOff=true;renderSheet()});
 $('editCats')&&($('editCats').onclick=()=>openCats(st.type==='income'?'income':'expense',()=>{if(!catsOf(st.type==='income'?'income':'expense',cur(acct(st.accountId))).includes(st.category))st.category='';renderSheet()},cur(acct(st.accountId))));
@@ -834,7 +861,7 @@ const monthsWithData=(rng,c)=>new Set(D.txns.filter(t=>t.type==='expense'&&inCur
 function p_nw(){const b=balances();let v=0;const c=R.cur;D.accounts.forEach(a=>{if(cur(a)!==c)return;
 if(isLoan(a)||isCard(a))v-= (isCard(a)&&a.closeDay?cardState(a).total:-b[a.id]);
 else if(isInvest(a))v+=(investValue(a)??holdings(a).net);else v+=b[a.id]});return v}
-function reports(){const curs=[...new Set(D.accounts.map(cur))].sort((x,y)=>x==='USD'?-1:y==='USD'?1:0);if(!curs.length)return`<div class="hrow"><div class="h1">Reports</div></div><div class="empty">Add an account and a few transactions first.</div>`;
+function reports(){const curs=[...new Set(D.accounts.map(cur))].sort((x,y)=>x==='USD'?-1:y==='USD'?1:0);if(!curs.length)return`<div class="hrow"><div class="h1">Reports</div></div><div class="empty" style="padding:26px 16px;text-align:center">Nothing to report yet<div class="muted" style="font-size:12px;margin-top:4px">Add an account and a few transactions, and this fills with your month, categories and trends.</div></div>`;
 const ALL=R.cur==='ALL';const c=ALL?baseCur():ensureCur(),m=R.month;R.year=+m.slice(0,4);const y=R.year;
 const spent=ALL?allSpent(m):spentIn(m,c),inflow=ALL?allEarned(m):inflowIn(m,c),recv=ALL?0:receivedIn(m,c),sent=ALL?0:sentIn(m,c),prev=ALL?allSpent(shiftMonth(m,-1)):spentIn(shiftMonth(m,-1),c),remaining=ALL?(allEarned(m)-allSpent(m)):remainingIn(m,c),saved=ALL?0:savedIn(m,c);
 const delta=prev>0?Math.round((spent-prev)/prev*100):null;const b=balances();
@@ -858,7 +885,7 @@ ${(()=>{if(ALL)return'';const bud=budgetFor(m,c),act=catSpend(m,c);
 const keys=[...new Set([...Object.keys(bud),...Object.keys(act)])].filter(k=>bud[k]>0||act[k]>0).sort((x,z)=>(act[z]||0)-(act[x]||0)||(+bud[z]||0)-(+bud[x]||0));
 const tExp=Object.values(bud).reduce((s2,v)=>s2+(+v||0),0),tAct=Object.values(act).reduce((s2,v)=>s2+v,0);
 const scoped=!!((D.budgets||{})[c]||{})[m];
-if(!keys.length)return`<div class="sec">Categories<span class="r"><button class="link" id="setBud">Set expected amounts</button></span></div><div class="card"><div class="empty" style="padding:24px 0;font-size:13px">No spending in ${mlabel(m).split(' ')[0]} yet.</div></div>`;
+if(!keys.length)return`<div class="sec">Categories<span class="r"><button class="link" id="setBud">Set expected amounts</button></span></div><div class="card"><div class="empty" style="padding:24px 16px;font-size:13px;text-align:center">No spending in ${mlabel(m).split(' ')[0]} yet<div class="muted" style="font-size:12px;margin-top:4px">Categories appear here as you add expenses.</div></div></div>`;
 const row=k=>{const a2=act[k]||0,e=+(bud[k]||0);const over=e>0&&a2>e;const col=e>0?(over?'var(--out)':'var(--in)'):'var(--ink3)';
 return`<div class="brow" data-cat="${esc(k)}" style="cursor:pointer"><div class="l"><span>${esc(k)} <span class="muted" style="font-size:11px">›</span></span><span class="num"><b style="color:${over?'var(--out)':'var(--ink)'}">${money(a2,0,c)}</b></span></div>
 <div class="track"><i style="width:${e>0?pct(a2,e):(tAct?Math.round(a2/tAct*100):0)}%;background:${col}"></i></div>
@@ -1356,7 +1383,9 @@ const fxRate=()=>{const m=fxSource();const lt=lastTransferFx();
 if(m==='manual'&&+D.settings.fx>0)return +(+D.settings.fx).toFixed(2);
 if(m==='live'&&+D.settings.fxLive>0)return +(+D.settings.fxLive).toFixed(2);
 return +(lt||D.settings.fxLive||D.settings.fx||88).toFixed(2)};
-const baseCur=()=>D.settings.wCur||'INR';
+const baseCur=()=>((typeof R!=='undefined'&&R.cur&&R.cur!=='ALL')?R.cur:(D.settings.wCur||'INR'));
+const tgtCur=()=>D.settings.wTargetCur||'INR';
+const targetIn=c=>{const v=+(D.settings.wTarget||0);if(!v)return 0;const from=tgtCur();if(from===c)return v;return from==='INR'?v/fxRate():v*fxRate()};
 const toINR=(v,c)=>c==='INR'?v:v*fxRate();
 const toBase=(v,c)=>{const b=baseCur();if(c===b)return v;return b==='INR'?v*fxRate():v/fxRate()};
 // liquid = cash/checking/savings/held ; deposits = fd/rd/bond/ppf ; growth = gold/fund/stock/land
@@ -1480,7 +1509,7 @@ return`<div class="muted" style="line-height:1.45;margin-bottom:12px">A card you
 ${cs.length?`<div class="card">${cs.map(a=>{const b=cardBehaviour(a);const mode=a.carry===true?'carry':a.carry===false?'full':'auto';
 return`<div class="brow"><div class="l"><span><b>${esc(a.name)}</b></span><span class="num ${b.total>0?'out':''}">${money(b.total,0,cur(a))}</span></div>
 <div class="muted" style="font-size:11px;margin:4px 0 8px">${b.promo?`0% until ${dlabel(b.promoUntil,1)}`:b.apr>0?`${b.apr}% APR`:'no APR set'}${b.due?` · due ${dlabel(b.due,1)}`:''}</div>
-<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['auto','Work it out'],['full','I pay in full'],['carry','I carry a balance']].map(([k,l])=>`<button data-cm="${a.id}|${k}" class="${mode===k?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div></div>`}).join('')}</div>`:'<div class="empty" style="padding:20px 0">No cards yet.</div>'}
+<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['auto','Work it out'],['full','I pay in full'],['carry','I carry a balance']].map(([k,l])=>`<button data-cm="${a.id}|${k}" class="${mode===k?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div></div>`}).join('')}</div>`:'<div class="empty" style="padding:22px 16px;text-align:center">No credit cards yet<div class="muted" style="font-size:12px;margin-top:4px">Add one from Home › Add account to track statements and 0% offers.</div></div>'}
 <div class="muted" style="font-size:11px;margin-top:12px">"Work it out" uses your statement: if the last one wasn't paid by its due date, it's treated as carried.</div>`},
 wire(){document.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.cm.split('|');const a=acct(id);
 if(m==='auto')delete a.carry;else a.carry=(m==='carry');localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
@@ -1496,7 +1525,7 @@ ${mode==='all'?`<div class="muted" style="font-size:12px;margin:0 0 10px 4px">Ev
 ${mode==='cash'?'<div class="muted" style="font-size:13px;text-align:center;padding:14px 0">Only cash and deposits count. Tap Custom to pick individual assets.</div>'
 :assets.length?`<div class="muted" style="font-size:11px;margin:0 0 6px 4px">Assets — tick what belongs in this target</div><div class="card">${assets.map(a=>{const on=!ex.includes(a.id);const v=investValue(a)??holdings(a).net;
 return`<div class="row" data-atog="${a.id}" style="${on?'':'opacity:.55'}"><div style="width:22px;font-size:17px;color:${on?'var(--accent)':'var(--ink3)'}">${on?'☑':'☐'}</div>${logoEl(a,28)}<div class="main"><div class="t" style="font-size:14px">${esc(a.name)}</div><div class="s">${KINDS[a.kind]||''}${isLand(a)&&a.area?' · '+(+a.area)+' '+unitLabel(a):''}${a.kind==='gold'?' · '+(+holdings(a).units.toFixed(3))+'g':''}</div></div><div class="amt num">${money(v,0,cur(a))}</div></div>`}).join('')}</div>`
-:'<div class="empty" style="padding:20px 0;font-size:13px">No gold, funds, land or stocks yet.</div>'}
+:'<div class="empty" style="padding:22px 16px;font-size:13px;text-align:center">No investments yet<div class="muted" style="font-size:12px;margin-top:4px">Gold, deposits, funds and land can be added from Menu › Investments.</div></div>'}
 <div class="note mv" style="margin-top:12px">Counting ${mode==='cash'?'cash and deposits only':money(tot,0,c)+' of assets'} · net worth ${p?money(p.net,0,c):'—'}${p&&p.hit!=null?` · target ${mLabel(p.hit)}`:''}
 ${ex.length&&mode==='custom'?`<span class="muted" style="display:block;margin-top:4px">With everything included it would be ${(()=>{const keep=D.settings.wExclude;D.settings.wExclude=[];const q=project(+D.settings.wTarget||0,{window:+(D.settings.wWin||6),includeInvest:true,extra:+(D.settings.wExtra||0)});D.settings.wExclude=keep;return q.hit!=null?mLabel(q.hit):'—'})()}.</span>`:''}</div>`},
 wire(){document.querySelectorAll('[data-amode]').forEach(b=>b.onclick=()=>{const m=b.dataset.amode;
@@ -1536,9 +1565,8 @@ document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderShee
 const rateLine=(ctx)=>{const mode=fxSource();const age=daysSince(D.settings.fxLiveAt);
 return`<div class="muted" style="font-size:11px;margin:8px 4px 0;line-height:1.45">${ctx} converted at <b>₹${fxRate()}</b> per $ · ${mode==='manual'?'rate you set':mode==='live'?`market${D.settings.fxLive?', '+(age===0?'today':age+'d old'):''}`:'your last transfer'} <button class="link" id="rateOpen" style="font-size:11px">Change ›</button></div>`};
 function openWealth(){const st=D.settings;
-sheet={title:'Wealth target',body(){const target=+(st.wTarget||0);
+sheet={title:'Wealth target',body(){const target=targetIn(baseCur());
 if(!target)return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Name an amount and the app works out the date, using what you actually earn and spend — not estimates. Everything is converted to rupees at the rate below.</div>
-<div class="seg" style="grid-template-columns:1fr 1fr">${['INR','USD'].map(k=>`<button data-wcur="${k}" class="${baseCur()===k?'on':''}">${k} ${CUR[k].sym}</button>`).join('')}</div>
 <label class="field"><div>Target net worth (${CUR[baseCur()].sym})</div><input id="wt" class="num" inputmode="decimal" placeholder="${baseCur()==='INR'?'1000000':'10000'}"></label>
 <button class="btn p" id="wtOk">Set target</button>`;
 const cutSum=(st.wCuts||[]).reduce((a,x)=>a+(+x.v||0),0);const extraTotal=Math.round(((+st.wExtra||0)+cutSum)*100)/100;
@@ -1547,7 +1575,7 @@ const f=x=>money(x,0,baseCur());
 const alt=project(target,{window:+(st.wWin||6),includeInvest:st.wInv===false,extra:extraTotal});
 const ideas=cutIdeas(+(st.wWin||6));
 const withCuts=+(st.wExtra||0);
-return`<div class="kpi" style="grid-template-columns:1fr;margin:0 0 12px"><div class="stat"><span>Target ${f(target)} · reached</span><b class="num" style="font-size:26px;color:${p.hit==null?'var(--out)':'var(--in)'}">${p.hit==null?'not at this pace':mLabel(p.hit)}</b><i>${p.hit==null?'surplus is too small — see the cuts below':dur(p.hit)+' away at '+f(p.save)+'/month'}</i></div></div>
+return`<div class="kpi" style="grid-template-columns:1fr;margin:0 0 12px"><div class="stat"><span>Target ${f(target)}${tgtCur()!==baseCur()?` <span class="muted">(set in ${tgtCur()})</span>`:''} · reached</span><b class="num" style="font-size:26px;color:${p.hit==null?'var(--out)':'var(--in)'}">${p.hit==null?'not at this pace':mLabel(p.hit)}</b><i>${p.hit==null?'surplus is too small — see the cuts below':dur(p.hit)+' away at '+f(p.save)+'/month'}</i></div></div>
 <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">${p.useCurrent?`${mlabel(mk(today()))} so far — day ${p.dayNow} of ${p.dim}, scaled to a full month`:`From your last ${p.months} complete month${p.months===1?'':'s'}${p.partial?` — you asked for ${p.asked}, that's all the history there is`:''}`}</div>
 ${p.thin?`<div class="note out" style="margin:0 0 10px">Nothing recorded yet this month, so the figures below are only what you type into "If I save more each month".</div>`:p.useCurrent?`<div class="note mv" style="margin:0 0 10px">Only this month so far, scaled up to a full month — treat the date as rough. Once ${mlabel(mk(today())).split(' ')[0]} ends it switches to complete months automatically.</div>`:p.months<3?`<div class="note mv" style="margin:0 0 10px">Based on ${p.months} complete month${p.months===1?'':'s'} — treat the date as rough until you have a few more.</div>`:''}
 ${(()=>{const d=flowDetail(+(st.wWin||6));const open=st.wOpen||'';const fc=(v,c)=>money(v,0,c);
@@ -1611,7 +1639,7 @@ ${ideas.length?`<div class="card">${ideas.map((i,n)=>`<div class="brow"><div cla
 <div class="muted num" style="font-size:11px;margin-top:4px">${i.trim?`Your biggest spend here — trimming ${i.trim}% would free ${money(i.save,0,i.c)}`:''}${i.overBudget>1?`${money(i.overBudget,0,i.c)} over your expected ${money(i.budget,0,i.c)}`:''}${i.overBudget>1&&i.overAvg>1?' · ':''}${i.overAvg>1?`${i.pctAvg>0?'+'+i.pctAvg+'%':''} vs your ${money(i.avg,0,i.c)} average`:''}</div>
 <div class="muted num" style="font-size:11px;margin-top:2px">Trimming ${money(i.save,0,i.c)}/month → ${(()=>{const e=+(st.wExtra||0)+toINR(i.save,i.c);const q=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:e});return p.hit!=null&&q.hit!=null?`${dur(p.hit-q.hit)} sooner`:'helps'})()}</div>
 <div class="tools" style="margin-top:8px">${(()=>{const key=i.c+'|'+i.cat;const on=(st.wCuts||[]).some(x=>x.k===key);return`<button class="btn" data-cutk="${esc(key)}" data-cutv="${toBase(i.save,i.c).toFixed(2)}" style="width:auto;font-size:12px;padding:7px 12px;${on?'background:var(--mvS);color:var(--mv)':''}">${on?'✓ Counted in my extra':'Add to my extra'}</button>`})()}</div></div>`).join('')}</div>`
-:'<div class="empty" style="padding:18px 0;font-size:13px">No spending recorded to suggest cuts from yet.</div>'}
+:'<div class="empty" style="padding:20px 16px;font-size:13px;text-align:center">Nothing to suggest yet<div class="muted" style="font-size:12px;margin-top:4px">Once you have a month of expenses, this ranks what you could trim and what it would save.</div></div>'}
 `:''}
 ${currencies().length>1?rateLine('USD side'):''}
 <div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="width:auto">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
@@ -1635,7 +1663,7 @@ $('ooReview')&&($('ooReview').onclick=()=>{markBack();const oo=D.txns.filter(t=>
 if(oo.length){const c=cur(acct(oo[0].accountId));R.cur=c;localStorage.setItem('ledger-cur',c)}
 F={q:'',acct:'all',type:'expense',cat:null,month:null,cur:null,year:null,oneOff:true};sheet=null;tab='activity';render();window.scrollTo(0,0)});
 $('ooHelp')&&($('ooHelp').onclick=()=>toast('Open a transaction and tick "One-off", or mark a whole category in Menu › Categories'));
-document.querySelectorAll('[data-wcur]').forEach(b=>b.onclick=()=>{st.wCur=b.dataset.wcur;save();openWealth()});
+
 document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';save();openWealth()});
 $('wfx')&&($('wfx').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){st.fx=v;st.fxMode='manual';save();openWealth()}});
 $('fxRetry')&&($('fxRetry').onclick=async()=>{try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;save();openWealth();toast('Rate updated')}catch(e){D.settings.fxErr=today();save();toast("Still couldn't reach the rate service")}});
@@ -1643,8 +1671,8 @@ $('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';save(
 try{const r=await fetchFx('USD','INR');st.fxLive=+r.toFixed(2);st.fxLiveAt=today();st.fxMsg=`Market rate ₹${st.fxLive} per $.${lastTransferFx()?` You last converted at ₹${lastTransferFx()}.`:''}`}
 catch(e){st.fxMsg="Couldn't reach a rate service — set it yourself instead."}
 st.fxBusy=false;save();openWealth()});
-$('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;save();openWealth()});
-$('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wExtra;delete st.wCuts;save();sheet=null;render()});
+$('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;delete st.wTargetCur;save();openWealth()});
+$('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wTargetCur;delete st.wExtra;delete st.wCuts;save();sheet=null;render()});
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
 // ---------- duplicates ----------
@@ -1797,11 +1825,20 @@ $('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup f
 if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
 
 // ---------- menu / appearance / pin ----------
+function openSettings(){sheet={title:'Settings',body(){
+const rows=[['appearance','Appearance','Theme, accent, bank logos'],['cats','Categories','Add, rename, reorder, flexibility'],['rate','Exchange rate','₹'+fxRate()+' per $'],['cards','Cards','How each card is treated'],['pin','PIN lock',D.settings.pinHash?'On':'Off'],['cloud','Cloud backup',cfgGet()?(syncMeta().at?'Last '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'Signed out'):'Not set up'],['backup','Backup file','Copy, paste, save as file']];
+return`<div class="card">${rows.map(([k,t,sub])=>`<div class="row" data-set="${k}"><div class="main"><div class="t" style="font-size:15px">${t}</div><div class="s">${esc(sub)}</div></div><div class="amt muted">›</div></div>`).join('')}</div>
+<div class="muted" style="font-size:11px;margin-top:12px;text-align:center">Ledger ${VERSION}</div>`},
+wire(){document.querySelectorAll('[data-set]').forEach(el=>el.onclick=()=>{const k=el.dataset.set;
+if(k==='appearance')openAppearance();else if(k==='cats')openCats('expense');else if(k==='rate')openRateSheet();
+else if(k==='cards')openCardModes();else if(k==='pin')openPin();
+else if(k==='cloud')openCloud();else if(k==='backup')openBackup()});
+document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 function openMenu(){
-const items=[['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['rate','Exchange rate','How dollars convert to rupees'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud backup',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
+const items=[['settings','Settings','Appearance, categories, rate, cards, PIN'],['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers'],['cats','Categories','Add, rename, reorder'],['rate','Exchange rate','How dollars convert to rupees'],['look','Appearance','Light, dark, accent color'],['pin',D.settings.pinHash?'PIN lock · on':'PIN lock','Ask for a code when the app opens'],['cloud','Cloud backup',(cfgGet()?(syncMeta().at?'Last backup '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'set up, not backed up yet'):'Sign in with Google to back up')],['backup','Backup & move','Copy, paste, or save everything']];
 sheet={title:'Menu',body(){return`<div class="card menu">${items.map(([k,t,d])=>`<div class="row" data-mi="${k}"><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div><span class="muted">›</span></div>`).join('')}</div><div class="muted" style="text-align:center;margin-top:14px;font-size:12px">Ledger v${VERSION}</div>`},
 wire(){document.querySelectorAll('[data-mi]').forEach(el=>el.onclick=()=>{const k=el.dataset.mi;sheet=null;
-if(k==='wealth')openWealth();else if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='rate')openRateSheet();else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
+if(k==='settings')openSettings();else if(k==='wealth')openWealth();else if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='rate')openRateSheet();else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
 function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.theme||'auto';return`<div class="field"><div>Theme</div><div class="seg" style="margin:0">${[['auto','Match phone'],['light','Light'],['dark','Dark']].map(([v,l])=>`<button data-th="${v}" class="${t===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="field"><div>Accent color</div><div class="sw">${ACCENTS.map(([c,n])=>`<button data-ac="${c}" title="${n}" class="${(D.settings.accent||'#2F4BC9')===c?'on':''}" style="background:${c}"></button>`).join('')}</div></div>
 <div class="muted" style="margin-bottom:16px">Used for transfers, the + button, links and charts.</div>
@@ -1841,7 +1878,7 @@ $('rsFile').onclick=()=>$('rsFileIn').click();$('rsFileIn').onchange=e=>{const f
 $('ok').onclick=()=>{if(!parsed)return;if(D.txns.length&&!confirm(`Replace the ${D.txns.length} transactions already here?`))return;D={accounts:parsed.accounts,txns:parsed.txns,budgets:parsed.budgets||{},cats:parsed.cats||{},goals:parsed.goals||[],groups:parsed.groups||[],recurring:parsed.recurring||[],settings:{...(parsed.settings||{}),pinHash:D.settings.pinHash}};migrateCats();applyTheme();sheet=null;save();toast('Restored')}}};renderSheet()}
 
 // ---------- nav ----------
-document.querySelectorAll('nav [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;BACK=null;SEL=null;clearFilters();render();window.scrollTo(0,0)});
+document.querySelectorAll('nav [data-tab]').forEach(b=>b.onclick=()=>{if(b.dataset.tab==='menu'){openMenu();return}tab=b.dataset.tab;BACK=null;SEL=null;clearFilters();render();window.scrollTo(0,0)});
 document.getElementById('plus').onclick=()=>{SEL=null;openTxn()};
 document.getElementById('menuBtn').onclick=openMenu;
 (async()=>{try{const r=await fetch(location.pathname.replace(/[^/]*$/,'')+'index.html?probe='+Date.now(),{cache:'reload'});const txt=await r.text();const m=txt.match(/VERSION='([^']+)'/);
