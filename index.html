@@ -172,7 +172,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.8 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.9 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -385,7 +385,7 @@ return`${SEL?`<div class="card" style="padding:10px 14px;margin-bottom:10px;back
 <div class="tools" style="margin-top:8px">${SEL.length?`<button class="btn" id="selCat" style="width:auto;font-size:12px;padding:7px 12px">Change category</button><button class="btn" id="selOne" style="width:auto;font-size:12px;padding:7px 12px">Mark one-off</button><button class="btn d" id="selDel" style="width:auto;font-size:12px;padding:7px 12px;margin:0">Delete</button>`:'<span class="muted" style="font-size:12px">Tap rows to select them.</span>'}</div></div>`:''}
 ${BACK&&!SEL?`<button class="link" id="backBtn" style="font-size:13px;padding:0 0 6px">‹ Back to ${BACK.tab==='reports'?'reports':BACK.tab==='home'?'home':BACK.tab}</button>`:''}
 <div class="hrow"><div class="h1">Activity</div>${SEL?'':`<button class="link" id="selStart" style="font-size:13px">Select</button>`}</div>
-${F.all?'':curToggle()}<input id="q" value="${esc(F.q)}" placeholder="Search notes, categories, accounts" style="margin-top:10px;font-size:14px;padding:9px 12px">
+${F.all?'':curToggle()}<div class="qwrap" style="margin-top:10px"><input id="q" value="${esc(F.q)}" placeholder="Search notes, categories, accounts" enterkeyhint="search" style="font-size:14px;padding:9px 12px"></input>${F.q?`<button id="qClr" type="button" aria-label="Clear">×</button><button id="qGo" type="button" aria-label="Search">⌕</button>`:''}</div>
 ${(()=>{const rec=(D.recent||[]),sav=(D.saved||[]);if(!rec.length&&!sav.length)return'';
 return`<div style="margin-top:8px">${sav.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Saved</div><div class="chips" style="margin-bottom:8px">${sav.map((f,i)=>`<button type="button" data-sf="${i}" style="background:var(--mvS);border-color:var(--mvBd);color:var(--mv)">${esc(fLabel(f))}</button>`).join('')}</div>`:''}
 ${rec.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Recent</div><div class="chips" style="margin-bottom:4px">${rec.map((f,i)=>`<button type="button" data-rf="${i}">${esc(fLabel(f))}</button>`).join('')}</div>`:''}</div>`})()}
@@ -457,10 +457,12 @@ v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.datase
 if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name,split:!!r.who,who:r.who||[]},()=>{r.posted=r.posted||[];r.posted.push(m)})});
 v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('card:')||id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast('Hidden for '+mlabel(m).split(' ')[0]);return}
 if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
-const q=v.querySelector('#q');if(q){q.onblur=()=>{clearTimeout(QT);rememberSearch(v.querySelectorAll('[data-txn]').length)};q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
-v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
-v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render()});
-if(tab==='activity'&&(F.q.trim()||F.cat||F.type!=='all'||F.acct!=='all'||F.month||F.year||F.oneOff))queueRemember(v.querySelectorAll('[data-txn]').length);
+const commitQ=()=>{const n=v.querySelectorAll('[data-txn]').length;rememberSearch(n);if(n)toast(n+' result'+(n===1?'':'s'))};
+v.querySelector('#qGo')?.addEventListener('click',()=>{v.querySelector('#q')?.blur();commitQ()});
+v.querySelector('#qClr')?.addEventListener('click',()=>{F.q='';render();setTimeout(()=>document.getElementById('q')?.focus(),0)});
+const q=v.querySelector('#q');if(q){q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();q.blur();commitQ()}};q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
+v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render();rememberSearch(document.querySelectorAll('[data-txn]').length)});
+v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render();rememberSearch(document.querySelectorAll('[data-txn]').length)});
 v.querySelector('#backBtn')?.addEventListener('click',goBack);
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>applyFilter((D.recent||[])[+b.dataset.rf]));
@@ -813,14 +815,14 @@ ${years.length>1?`<div class="sec">All years</div><div class="card"><table class
 function wireReports(v){v.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=>{R.month=shiftMonth(R.month,+b.dataset.mo);render()});
 v.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{R.month=b.dataset.jump;render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{R.month=b.dataset.year+R.month.slice(4);render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();rememberSearch(document.querySelectorAll('[data-txn]').length);window.scrollTo(0,0)});
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelector('#chartMode')?.addEventListener('click',()=>{R.chartMode=(R.chartMode||'flow')==='flow'?'cat':'flow';render()});
 v.querySelector('#chartSpan')?.addEventListener('click',()=>{R.chartAll=!R.chartAll;render()});
 v.querySelectorAll('[data-catrange]').forEach(b=>b.onclick=()=>{R.catRange=b.dataset.catrange;render()});
 v.querySelectorAll('[data-catrow]').forEach(b=>b.onclick=()=>{R.catOpen=R.catOpen===b.dataset.catrow?null:b.dataset.catrow;render()});
 v.querySelectorAll('[data-catjump]').forEach(b=>b.onclick=e=>{e.stopPropagation();markBack();F={q:'',acct:'all',type:'expense',cat:b.dataset.catname,month:b.dataset.catjump,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();rememberSearch(document.querySelectorAll('[data-txn]').length);window.scrollTo(0,0)});
 v.querySelector('#pickMonth')?.addEventListener('click',openMonthPicker);
 v.querySelector('#setBud')?.addEventListener('click',openBudget);v.querySelector('#openGoals')?.addEventListener('click',openGoals);v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)))}
 
@@ -1775,7 +1777,8 @@ if(m&&m[1]!==VERSION){const el=document.createElement('div');el.style.cssText='p
 el.innerHTML='<span style="flex:1">Version '+m[1].split(' ')[0]+' is available.</span><button style="background:#fff;color:var(--accent);border:0;border-radius:8px;padding:7px 12px;font:inherit;font-weight:600">Update</button>';
 el.querySelector('button').onclick=()=>{location.replace(location.pathname+'?v='+Date.now())};document.body.appendChild(el)}}catch(e){}})();
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
-try{migrateCats();applyTheme();render();setTimeout(()=>{try{autoRates()}catch(e){}},1500);if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
+try{if(Array.isArray(D.recent)){const before=D.recent.length;D.recent=D.recent.filter(f=>!(f.q&&f.q.trim().length<3&&!f.cat&&f.type==='all'&&f.acct==='all'&&!f.month&&!f.year));if(D.recent.length!==before)localStorage.setItem(KEY,JSON.stringify(D))}
+migrateCats();applyTheme();render();setTimeout(()=>{try{autoRates()}catch(e){}},1500);if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
 </script>
 </body>
 </html>
