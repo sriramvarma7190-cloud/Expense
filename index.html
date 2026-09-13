@@ -172,7 +172,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.7 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.8 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -371,8 +371,11 @@ const clearFilters=()=>{F={q:'',acct:'all',type:'all',cat:null,month:null,cur:nu
 const markBack=()=>{BACK={tab,cur:R.cur,month:R.month,catOpen:R.catOpen,chartMode:R.chartMode,y:window.scrollY||0}};
 function fKey(){return JSON.stringify({q:F.q.trim(),acct:F.acct,type:F.type,cat:F.cat,month:F.month,year:F.year,oneOff:F.oneOff,all:F.all})}
 function fLabel(f){const p2=[];if(f.q)p2.push('"'+f.q+'"');if(f.cat)p2.push(f.cat);if(f.type!=='all')p2.push(f.type);if(f.acct!=='all')p2.push(acct(f.acct)?.name||'');if(f.month)p2.push(mlabel(f.month).split(' ')[0]);if(f.year)p2.push(f.year);if(f.oneOff)p2.push('one-offs');if(f.all)p2.push('all currencies');return p2.filter(Boolean).join(' · ')||'Everything'}
-function rememberSearch(){const k=fKey();const f=JSON.parse(k);if(!f.q&&!f.cat&&f.type==='all'&&f.acct==='all'&&!f.month&&!f.year&&!f.oneOff)return;
+function rememberSearch(hits){const k=fKey();const f=JSON.parse(k);
+if(!f.q&&!f.cat&&f.type==='all'&&f.acct==='all'&&!f.month&&!f.year&&!f.oneOff)return;
+if(hits===0)return;
 D.recent=(D.recent||[]).filter(x=>JSON.stringify(x)!==k);D.recent.unshift(f);D.recent=D.recent.slice(0,4);localStorage.setItem(KEY,JSON.stringify(D))}
+let QT=null;function queueRemember(hits){clearTimeout(QT);QT=setTimeout(()=>{rememberSearch(hits)},700)}
 function applyFilter(f){F={q:f.q||'',acct:f.acct||'all',type:f.type||'all',cat:f.cat||null,month:f.month||null,cur:null,year:f.year||null,oneOff:!!f.oneOff,all:!!f.all};render()}
 function activity(){const c=ensureCur();const s=F.q.trim().toLowerCase();
 const list=[...D.txns].filter(t=>F.acct==='all'||t.accountId===F.acct||t.toAccountId===F.acct).filter(t=>F.type==='all'||t.type===F.type).filter(t=>!F.cat||(t.category||'Other')===F.cat).filter(t=>!F.month||mk(t.date)===F.month).filter(t=>!F.year||t.date.startsWith(F.year)).filter(t=>!F.oneOff||isOneOff(t)).filter(t=>F.all||cur(acct(t.accountId))===c||(t.type==='transfer'&&cur(acct(t.toAccountId))===c)).filter(t=>!s||(t.note||'').toLowerCase().includes(s)||(t.category||'').toLowerCase().includes(s)||(acct(t.accountId)?.name||'').toLowerCase().includes(s)).sort((x,y)=>y.date.localeCompare(x.date)||y.created-x.created);
@@ -454,9 +457,10 @@ v.querySelectorAll('[data-post]').forEach(b=>b.onclick=()=>{const[id,m]=b.datase
 if(id.startsWith('loan:')){const a=acct(id.slice(5));const from=D.accounts.find(x=>cur(x)===cur(a)&&(x.type==='checking'||x.type==='savings'));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:a.emi,note:a.name+' payment'});return}const r=D.recurring.find(x=>x.id===id);const d=dueDate(r,m);openTxn(null,{type:r.type,amount:r.amount,date:d,accountId:r.accountId,toAccountId:r.toAccountId,category:r.category,note:r.note||r.name,split:!!r.who,who:r.who||[]},()=>{r.posted=r.posted||[];r.posted.push(m)})});
 v.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.skip.split('|');if(id.startsWith('card:')||id.startsWith('rd:')||id.startsWith('pay:')){const a=acct(id.slice(id.indexOf(':')+1));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast('Hidden for '+mlabel(m).split(' ')[0]);return}
 if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(!a.skipDue.includes(m))a.skipDue.push(m);save();toast(mlabel(m).split(' ')[0]+' reminder hidden — recording a payment still counts');return}const r=D.recurring.find(x=>x.id===id);r.posted=r.posted||[];r.posted.push(m);save();toast('Skipped for '+mlabel(m).split(' ')[0])});
-const q=v.querySelector('#q');if(q){clearTimeout(window._qt);q.oninput=e=>{F.q=e.target.value;clearTimeout(window._qt);window._qt=setTimeout(()=>{rememberSearch()},900);const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
-v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;rememberSearch();render()});
-v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;rememberSearch();render()});
+const q=v.querySelector('#q');if(q){q.onblur=()=>{clearTimeout(QT);rememberSearch(v.querySelectorAll('[data-txn]').length)};q.oninput=e=>{F.q=e.target.value;const pos=q.selectionStart;render();const nq=document.getElementById('q');nq.focus();nq.setSelectionRange(pos,pos)}}
+v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render()});
+v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render()});
+if(tab==='activity'&&(F.q.trim()||F.cat||F.type!=='all'||F.acct!=='all'||F.month||F.year||F.oneOff))queueRemember(v.querySelectorAll('[data-txn]').length);
 v.querySelector('#backBtn')?.addEventListener('click',goBack);
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>applyFilter((D.recent||[])[+b.dataset.rf]));
@@ -809,14 +813,14 @@ ${years.length>1?`<div class="sec">All years</div><div class="card"><table class
 function wireReports(v){v.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=>{R.month=shiftMonth(R.month,+b.dataset.mo);render()});
 v.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{R.month=b.dataset.jump;render();window.scrollTo(0,0)});
 v.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{R.month=b.dataset.year+R.month.slice(4);render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';rememberSearch();render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.cat,month:R.month,cur:null,year:null,oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelector('#chartMode')?.addEventListener('click',()=>{R.chartMode=(R.chartMode||'flow')==='flow'?'cat':'flow';render()});
 v.querySelector('#chartSpan')?.addEventListener('click',()=>{R.chartAll=!R.chartAll;render()});
 v.querySelectorAll('[data-catrange]').forEach(b=>b.onclick=()=>{R.catRange=b.dataset.catrange;render()});
 v.querySelectorAll('[data-catrow]').forEach(b=>b.onclick=()=>{R.catOpen=R.catOpen===b.dataset.catrow?null:b.dataset.catrow;render()});
 v.querySelectorAll('[data-catjump]').forEach(b=>b.onclick=e=>{e.stopPropagation();markBack();F={q:'',acct:'all',type:'expense',cat:b.dataset.catname,month:b.dataset.catjump,cur:R.cur};tab='activity';render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';rememberSearch();render();window.scrollTo(0,0)});
+v.querySelectorAll('[data-catall]').forEach(b=>b.onclick=()=>{markBack();const isAll=R.cur==='ALL';F={q:'',acct:'all',type:'expense',cat:b.dataset.catall,month:null,cur:null,year:R.catRange==='all'?null:String(R.year),oneOff:false,all:isAll};if(isAll)R.cur=currencies()[0]||'USD';tab='activity';render();window.scrollTo(0,0)});
 v.querySelector('#pickMonth')?.addEventListener('click',openMonthPicker);
 v.querySelector('#setBud')?.addEventListener('click',openBudget);v.querySelector('#openGoals')?.addEventListener('click',openGoals);v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)))}
 
