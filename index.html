@@ -179,7 +179,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='10.2 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='10.3 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1282,6 +1282,16 @@ return`<div class="kpi" style="grid-template-columns:1fr 1fr;margin:0 0 12px"><d
 <div class="stat"><span>Interest per day</span><b class="num">${f(L.daily)}</b><i class="num">${f(L.principalOut)} × ${a.rate}% ÷ ${(a.basis||365)*100}</i></div>
 <div class="stat"><span>Paid so far</span><b class="num">${f(L.paidPrincipal+L.paidInterest)}</b><i class="num">${f(L.paidPrincipal)} principal · ${f(L.paidInterest)} interest</i></div>
 ${(()=>{const s0=a.emi>0?simLoan(a):null;return`<div class="stat"><span>Payoff at ${a.emi>0?f(a.emi)+'/mo':'current EMI'}</span><b class="num">${s0?s0.months+' mo':'—'}</b><i>${s0?'done by '+mlabel(mk(s0.payoff)):(a.emi>0?'EMI too small to cover interest':'set an EMI')}</i></div>`})()}</div>
+${(()=>{const P=L.principalOut,Rt=a.rate||0,e=a.emi||0;const n=a.months||0;
+if(!(P>0&&Rt>0&&e>0))return'';
+const s1=simLoan(a);const left=s1?s1.months:0;
+const calc=n>0?emiFor(P,Rt,n):(left>0?emiFor(P,Rt,left):0);
+if(!(calc>0))return'';
+const diff=e-calc;const pctOff=Math.abs(diff)/calc*100;
+if(pctOff<=2)return`<div class="muted num" style="font-size:11px;margin:-4px 0 12px">Your EMI ${f(e)} matches the calculated ${f(calc)} for ${n||left} months at ${Rt}% — within rounding.</div>`;
+const fast=n>0&&left>0&&n>left?n-left:0;
+return`<div class="card" style="padding:11px 14px;margin-bottom:12px"><div style="font-size:12px">Your EMI is <b class="num">${f(Math.abs(diff))} ${diff>0?'more':'less'}</b> than the ${f(calc)} calculated for ${n||left} months at ${Rt}%.</div>
+<div class="muted" style="font-size:11px;margin-top:4px">${diff>0?`Either the rate has changed, the tenure is different, or you are paying extra${fast?` — which clears the loan about ${fast} month${fast===1?'':'s'} early`:''}.`:'Check the rate or tenure — at this payment the loan runs longer than the tenure you entered.'}</div></div>`})()}
 ${a.emi>0&&L.out>0?(()=>{const base=simLoan(a);const xm=parseFloat(extraM)||0,lump=parseFloat(lumpAmt)||0;
 const wm=xm>0?simLoan(a,{extraMonthly:xm}):null;const wl=lump>0?simLoan(a,{lumps:[{date:lumpDate,amt:lump}]}):null;
 const both=(xm>0&&lump>0)?simLoan(a,{extraMonthly:xm,lumps:[{date:lumpDate,amt:lump}]}):null;
