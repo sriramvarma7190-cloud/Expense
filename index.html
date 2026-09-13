@@ -76,7 +76,11 @@ nav button{background:none;border:0;height:100%;font:inherit;font-size:14px;font
 nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--accent)}
 nav .plus{width:56px;height:56px;border-radius:28px;background:var(--btn);color:#fff;font-size:30px;line-height:1;margin:0 8px;box-shadow:0 6px 16px rgba(24,34,48,.28);border-top:0}
 .link{background:none;border:0;color:var(--mv);font:inherit;font-weight:600;font-size:14px;cursor:pointer;padding:0}
-input,select{font:inherit;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--sf);color:var(--ink);width:100%}
+input,select{font:inherit;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--sf);color:var(--ink);width:100%;height:46px;line-height:22px;box-sizing:border-box;-webkit-appearance:none;appearance:none}
+input[type=date]{text-align:left;min-height:46px;display:block}
+input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+select{background-image:linear-gradient(45deg,transparent 50%,var(--ink3) 50%),linear-gradient(135deg,var(--ink3) 50%,transparent 50%);background-position:calc(100% - 18px) 20px,calc(100% - 13px) 20px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px}
+textarea{height:auto}
 select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235B6673' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 .field{display:block;margin-bottom:12px}.field>div{font-size:13px;color:var(--ink2);margin-bottom:5px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -179,7 +183,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='10.3 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='10.4 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -192,6 +196,19 @@ const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOff
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const CUR={USD:{sym:'$',loc:'en-US',name:'US dollar'},INR:{sym:'₹',loc:'en-IN',name:'Indian rupee'}};
 const fmt=(n,c='USD')=>n.toLocaleString(CUR[c].loc,{style:'currency',currency:c,maximumFractionDigits:2});
+const grpLocale=c=>c==='INR'?'en-IN':'en-US';
+function groupNum(str,c){if(str==null)return'';let v=String(str).replace(/[^0-9.]/g,'');const parts=v.split('.');let ip=parts[0]||'';const dp=parts.length>1?'.'+parts.slice(1).join('').slice(0,2):'';
+if(!ip)return dp;const n=Number(ip);if(!isFinite(n))return ip+dp;
+return n.toLocaleString(grpLocale(c))+dp}
+function wireNum(el,c,onVal){if(!el||el._numWired)return;el._numWired=1;
+const clean=t=>{t=t.replace(/[^0-9.]/g,'');const i=t.indexOf('.');if(i>=0)t=t.slice(0,i+1)+t.slice(i+1).replace(/\./g,'');return t};
+el.addEventListener('input',()=>{const raw=clean(el.value);const endDigits=raw.length-(el.value.slice(0,el.selectionStart||0).replace(/[^0-9.]/g,'').length);
+const shown=groupNum(raw,c);el.value=shown;
+let pos=shown.length;let seen=0;for(let k=shown.length-1;k>=0;k--){if(/[0-9.]/.test(shown[k]))seen++;if(seen>=endDigits){pos=k;break}}
+try{el.setSelectionRange(pos,pos)}catch(e){}
+if(onVal)onVal(raw)});
+el.addEventListener('blur',()=>{el.value=groupNum(el.value,c)})}
+const numVal=el=>parseFloat(String(el&&el.value||'').replace(/[^0-9.]/g,''))||0;
 const money=(n,sign,c='USD')=>{const s=fmt(Math.abs(n),c);return sign?(n<0?'−':'+')+s:(n<0?'−':'')+s};
 const cur=a=>a?.currency||'USD';
 const mk=d=>d.slice(0,7);
@@ -540,6 +557,11 @@ const prevBox=el.querySelector('.sheet');const prevTop=prevBox?prevBox.scrollTop
 el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip"></div><div class="head"><b>${sheet.title}</b><button id="cancel">Cancel</button></div>${sheet.body()}</div></div>`;
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')closeSheet()};
 document.getElementById('cancel').onclick=closeSheet;sheet.wire();
+(function(){const cc=(typeof sheet.cur==='function'?sheet.cur():null)||(typeof R!=='undefined'?R.cur:'USD');
+el.querySelectorAll('input.num[inputmode]').forEach(inp=>{const c=inp.dataset.cur||cc;
+if(inp.value)inp.value=groupNum(inp.value,c);
+const prev=inp.oninput;
+wireNum(inp,c,()=>{if(prev)prev.call(inp,{target:{value:String(inp.value).replace(/[^0-9.]/g,''),selectionStart:null}})})})})();
 if(prevTop!=null){const box=el.querySelector('.sheet');if(box)box.scrollTop=prevTop}
 if(afId){const n=document.getElementById(afId);if(n&&n.focus){try{n.focus({preventScroll:true});if(afPos!=null&&n.setSelectionRange)n.setSelectionRange(afPos,afPos)}catch(e){}}}}
 
@@ -1351,14 +1373,14 @@ ${(()=>{const v=parseFloat(woAmt||bal)||0;const left=bal-v;return v>0&&left>0.00
 <button class="btn" id="editP" style="margin-top:12px">Edit person</button>`},
 wire(){const $=id=>document.getElementById(id);
 $('seA')&&($('seA').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'');amtIn=e.target.value},$('seA').onchange=()=>renderSheet());
-$('seOk')&&($('seOk').onclick=()=>{const bal=owedTo(a.id);const v=Math.round((parseFloat($('seA').value)||0)*100)/100;if(!(v>0))return;const other=$('seT').value;if(!other)return toast('Add a bank account first');
+$('seOk')&&($('seOk').onclick=()=>{const bal=owedTo(a.id);const v=Math.round((numVal($('seA'))||0)*100)/100;if(!(v>0))return;const other=$('seT').value;if(!other)return toast('Add a bank account first');
 D.txns.push(bal>=0?{id:uid(),created:Date.now(),type:'transfer',amount:v,date:today(),recvDate:today(),accountId:a.id,toAccountId:other,note:'Paid back'}:{id:uid(),created:Date.now(),type:'transfer',amount:v,date:today(),recvDate:today(),accountId:other,toAccountId:a.id,note:'Paid back'});
 sheet=null;save();toast('Recorded')});
 $('woStart')&&($('woStart').onclick=()=>{woOpen=true;woAmt='';woNote='';renderSheet()});
 $('woCancel')&&($('woCancel').onclick=()=>{woOpen=false;renderSheet()});
 $('woA')&&($('woA').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'');woAmt=e.target.value},$('woA').onchange=()=>renderSheet());
 $('woN')&&($('woN').oninput=e=>{woNote=e.target.value});
-$('woOk')&&($('woOk').onclick=()=>{const bal=owedTo(a.id);const v=Math.round((parseFloat($('woA').value||bal)||0)*100)/100;
+$('woOk')&&($('woOk').onclick=()=>{const bal=owedTo(a.id);const v=Math.round(((numVal($('woA'))||bal)||0)*100)/100;
 if(!(v>0))return toast('Enter an amount');if(v>bal+0.005)return toast('More than they owe you');
 if(!confirm(`Write off ${money(v,0,c)} from ${pname(a)}? It becomes an expense today and cannot be undone except by deleting that entry.`))return;
 D.txns.push({id:uid(),created:Date.now(),type:'expense',amount:v,date:today(),accountId:a.id,category:'Write-off',note:(woNote||'Written off').trim(),oneOff:true});
@@ -1672,7 +1694,7 @@ ${ideas.length?`<div class="card">${ideas.map((i,n)=>`<div class="brow"><div cla
 ${currencies().length>1?rateLine('USD side'):''}
 <div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="width:auto">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
 wire(){const $=id=>document.getElementById(id);
-$('wtOk')&&($('wtOk').onclick=()=>{const v=parseFloat($('wt').value.replace(/[^0-9.]/g,''))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();openWealth()});
+$('wtOk')&&($('wtOk').onclick=()=>{const v=numVal($('wt'))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();openWealth()});
 $('wt')&&($('wt').oninput=e=>e.target.value=e.target.value.replace(/[^0-9.]/g,''));
 document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dataset.win;save();openWealth()});
 document.getElementById('scTog')&&(document.getElementById('scTog').onclick=e=>{e.stopPropagation();st.wScaled=!st.wScaled;save();openWealth()});
