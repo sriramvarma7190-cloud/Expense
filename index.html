@@ -179,7 +179,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='10.1 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='10.2 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -346,7 +346,7 @@ const due=dueRecurring().filter(d=>{const ac=acct(d.r.accountId)||acct(d.r.toAcc
 const groups=[['checking','Checking & cash',a=>a.type==='checking'||a.type==='cash'],['savings','Savings',a=>a.type==='savings'],['invest','Investments',a=>a.type==='invest'],['credit','Credit cards',a=>a.type==='credit'],['loan','Loans',a=>a.type==='loan']];
 const gHtml=groups.map(([k,label,f])=>{const list=as.filter(f);if(!list.length)return'';const tot=list.reduce((s,a)=>s+(k==='credit'||k==='loan'?-b[a.id]:(k==='invest'?(investValue(a)??holdings(a).net):b[a.id])),0);const open=R.open[k];
 return`<div class="card" style="margin-bottom:10px"><div class="row" data-grp="${k}"><div class="main"><div class="t">${label}</div><div class="s">${list.length} account${list.length>1?'s':''}</div></div><div class="amt num ${(k==='credit'||k==='loan')&&tot>0?'out':''}">${money(tot,0,c)}${k==='credit'||k==='loan'?'<small>owed</small>':''}</div><span class="muted" style="margin-left:10px">${open?'▾':'›'}</span></div>${open?list.map(a=>accountRow(a,b[a.id])).join(''):''}</div>`}).join('');
-return`<div style="padding-right:46px"><div class="muted">Net worth · ${CUR[c].name}s</div><div class="net num ${net<0?'out':''}">${money(net,0,c)}</div><div class="muted num" style="display:flex;gap:20px;margin-top:6px"><span>Assets ${money(assets,0,c)}</span>${owed>0?`<span>Owed ${money(owed,0,c)}</span>`:''}</div>
+return`<div><div class="muted">Net worth · ${CUR[c].name}s</div><div class="net num ${net<0?'out':''}">${money(net,0,c)}</div><div class="muted num" style="display:flex;gap:20px;margin-top:6px;flex-wrap:wrap"><span>Assets ${money(assets,0,c)}</span>${(()=>{const o=peopleIn(c).reduce((s2,a)=>s2+Math.max(0,owedTo(a.id)),0);return o>0.005?`<span style="color:var(--accent)">${money(o,0,c)} owed to you</span>`:''})()}${owed>0?`<span>Owed ${money(owed,0,c)}</span>`:''}</div>
 </div>${curToggle()}
 <div class="sec">${mlabel(m)}<span class="r"><button class="link" data-tab-go="reports" style="font-size:12px">Reports ›</button></span></div>
 <div class="card"><div class="brow"><div class="l"><span>Spent so far</span><span class="num"><b class="out">${money(spent,0,c)}</b>${tExp?` <span class="muted" style="font-size:12px">of ${money(tExp,0,c)} expected</span>`:''}</span></div>${tExp?`<div class="track"><i style="width:${pct(spent,tExp)}%;background:${spent>tExp?'var(--out)':'var(--in)'}"></i></div><div class="muted num" style="font-size:11px;margin-top:4px">${spent>tExp?money(spent-tExp,0,c)+' over':money(tExp-spent,0,c)+' left to spend'}</div>`:''}</div>
@@ -355,7 +355,7 @@ ${earned>0||c==='USD'?`<div class="brow"><div class="l"><span>Earned</span><span
 ${sent>0?`<div class="brow"><div class="l"><span>Sent abroad</span><span class="num mv">${money(sent,0,c)}</span></div></div>`:''}
 <div class="brow" style="background:var(--bg)"><div class="l"><span><b>Remaining</b></span><span class="num"><b style="color:${remaining>=0?'var(--in)':'var(--out)'}">${money(remaining,0,c)}</b></span></div></div></div>
 ${due.length?`<div class="sec">Due<span class="r">${due.length} recurring</span></div><div class="card">${due.map(d=>`<div class="due"><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.r.name)}</div><div class="muted" style="font-size:12px">${dlabel(d.date)} · ${money(d.r.amount,0,cur(acct(d.r.accountId)))} · ${esc(acct(d.r.accountId)?.name||'')}${d.r.type==='transfer'?' → '+esc(acct(d.r.toAccountId)?.name||''):''}</div></div><button class="btn" data-skip="${d.r.id}|${d.m}" style="background:transparent;color:var(--ink2)">Skip</button><button class="btn p" data-post="${d.r.id}|${d.m}">Add</button></div>`).join('')}</div>`:''}
-${(()=>{const ppl=peopleIn(c).map(a=>({a,v:owedTo(a.id)})).filter(x=>Math.abs(x.v)>0.005);if(!ppl.length&&!peopleIn(c).length)return'';
+${(()=>{const ppl=peopleIn(c).map(a=>({a,v:owedTo(a.id)})).filter(x=>Math.abs(x.v)>0.005);if(!ppl.length)return'';
 const tot=ppl.reduce((x,y)=>x+y.v,0);
 return`<div class="sec">Owed to you<span class="r"><button class="link" id="mgGroups" style="font-size:12px">Groups</button></span></div><div class="card">
 <div class="brow" style="background:var(--bg)"><div class="l"><span><b>${tot>=0?'Owed to you':'You owe'}</b></span><span class="num"><b style="color:${tot>=0?'var(--in)':'var(--out)'}">${money(Math.abs(tot),0,c)}</b></span></div><div class="muted" style="font-size:11px;margin-top:4px">across ${ppl.length||peopleIn(c).length} ${(ppl.length||peopleIn(c).length)===1?'person':'people'}</div></div>
@@ -486,7 +486,7 @@ v.querySelector('#addGoalE')?.addEventListener('click',()=>openGoalEdit());
 v.querySelector('#setWealthE')?.addEventListener('click',openWealth);
 v.querySelectorAll('[data-goal]').forEach(el=>el.onclick=()=>openGoalDetail(D.goals.find(g=>g.id===el.dataset.goal)));
 v.querySelector('#staleBk')?.addEventListener('click',()=>{if(pass&&FBuser)cloudPush();else openCloud()});
-v.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>{R.open[b.dataset.grp]=!R.open[b.dataset.grp];render()});
+v.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>{R.open[b.dataset.grp]=!R.open[b.dataset.grp];localStorage.setItem('ledger-open',JSON.stringify(R.open));render()});
 v.querySelectorAll('[data-tab-go]').forEach(b=>b.onclick=()=>{tab=b.dataset.tabGo;render();window.scrollTo(0,0)});
 v.querySelector('#addGoal')?.addEventListener('click',()=>openGoalEdit());
 trimNotices(v);
@@ -832,7 +832,7 @@ D.txns.push({id,created:Date.now(),type,amount,toAmount,date:g('date'),recvDate:
 save();toast(`Imported ${added}${skipped?`, skipped ${skipped} duplicates`:''}`)};r.readAsText(f);e.target.value=''}
 
 // ---------- reports ----------
-let R={cur:localStorage.getItem('ledger-cur')||'USD',month:mk(today()),year:+today().slice(0,4),catRange:'year',catOpen:null,open:{checking:true,savings:true,credit:true,held:true}};
+let R={cur:localStorage.getItem('ledger-cur')||'USD',month:mk(today()),year:+today().slice(0,4),catRange:'year',catOpen:null,open:(()=>{try{const o=JSON.parse(localStorage.getItem('ledger-open')||'null');if(o&&typeof o==='object')return o}catch(e){}return{checking:true,savings:true,credit:true,held:true,invest:true,loan:true}})()};
 const currencies=()=>[...new Set(D.accounts.map(cur))].sort((x,y)=>x==='USD'?-1:y==='USD'?1:0);
 function ensureCur(){if(R.cur==='ALL')return baseCur();const cs=currencies();if(cs.length&&!cs.includes(R.cur))R.cur=cs[0];return R.cur}
 const curToggle=(withAll)=>{const cs=currencies();if(cs.length<2)return'';
@@ -1323,7 +1323,7 @@ $('gNew').onclick=()=>{st.name=$('gn2').value;const n=prompt('Their name');if(!n
 $('ok').onclick=()=>{const g={id:edit?.id||uid(),name:st.name.trim(),currency:c,members:st.members};if(edit)D.groups=D.groups.map(x=>x.id===g.id?g:x);else D.groups.push(g);save();openGroups(c,onDone)};
 $('del')&&($('del').onclick=()=>{D.groups=D.groups.filter(x=>x.id!==edit.id);save();openGroups(c,onDone)});
 document.getElementById('cancel').onclick=()=>openGroups(c,onDone)}};renderSheet()}
-function openPerson(a){const c=cur(a);let amtIn='';
+function openPerson(a){const c=cur(a);let amtIn='';let woOpen=false,woAmt='',woNote='';
 sheet={title:pname(a),body(){const bal=owedTo(a.id);const rows=D.txns.filter(t=>t.accountId===a.id||t.toAccountId===a.id).sort((x,y)=>y.date.localeCompare(x.date)).slice(0,15);
 return`<div class="kpi" style="grid-template-columns:1fr;margin:0 0 12px"><div class="stat"><span>${bal>=0?'Owes you':'You owe them'}</span><b class="num" style="color:${bal>=0?'var(--in)':'var(--out)'}">${money(Math.abs(bal),0,c)}</b><i>${esc(a.name)}</i></div></div>
 ${rows.length?`<div class="card" style="margin-bottom:12px">${rows.map(t=>txnRow(t,1)).join('')}</div>`:'<div class="empty" style="padding:18px 0">Nothing yet.</div>'}
@@ -1331,12 +1331,29 @@ ${Math.abs(bal)>0.005?`<div class="muted" style="font-size:12px;margin-bottom:8p
 <div class="g2" style="align-items:end"><label class="field" style="margin:0"><div>Amount (${CUR[c].sym})</div><input id="seA" class="num" inputmode="decimal" value="${esc(amtIn||String(Math.abs(bal)))}" placeholder="0.00"></label><label class="field" style="margin:0"><div>${bal>=0?'Into':'From'}</div><select id="seT">${D.accounts.filter(x=>cur(x)===c&&['checking','savings','cash'].includes(x.type)).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label></div>
 <button class="btn p" id="seOk">${bal>=0?'They paid me':'I paid them'}</button>
 ${(()=>{const v=parseFloat(amtIn||Math.abs(bal));const left=Math.abs(bal)-(v||0);return v>0&&left>0.005?`<div class="muted num" style="font-size:12px;margin-top:8px">${money(left,0,c)} would still be ${bal>=0?'owing':'owed'}.</div>`:''})()}`:'<div class="muted" style="font-size:13px">All settled up.</div>'}
+${(()=>{const bal=owedTo(a.id);if(bal<=0.005)return'';
+return`<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+<div class="muted" style="font-size:12px;margin-bottom:8px">If you have given up on being repaid, write it off. It becomes a real expense today and their balance clears — your history stays.</div>
+${woOpen?`<div class="g2" style="align-items:end"><label class="field" style="margin:0"><div>Write off (${CUR[c].sym})</div><input id="woA" class="num" inputmode="decimal" value="${esc(woAmt||String(bal))}"></label><label class="field" style="margin:0"><div>Note <span class="muted">optional</span></div><input id="woN" value="${esc(woNote)}" placeholder="Gave up chasing"></label></div>
+${(()=>{const v=parseFloat(woAmt||bal)||0;const left=bal-v;return v>0&&left>0.005?`<div class="muted num" style="font-size:12px;margin-bottom:8px">${money(left,0,c)} would still be owing.</div>`:''})()}
+<div class="tools"><button class="btn d" id="woOk" style="width:auto;margin:0">Write it off</button><button class="btn" id="woCancel" style="width:auto">Cancel</button></div>`
+:`<button class="btn" id="woStart">Write off what is owed</button>`}</div>`})()}
 <button class="btn" id="editP" style="margin-top:12px">Edit person</button>`},
 wire(){const $=id=>document.getElementById(id);
 $('seA')&&($('seA').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'');amtIn=e.target.value},$('seA').onchange=()=>renderSheet());
 $('seOk')&&($('seOk').onclick=()=>{const bal=owedTo(a.id);const v=Math.round((parseFloat($('seA').value)||0)*100)/100;if(!(v>0))return;const other=$('seT').value;if(!other)return toast('Add a bank account first');
 D.txns.push(bal>=0?{id:uid(),created:Date.now(),type:'transfer',amount:v,date:today(),recvDate:today(),accountId:a.id,toAccountId:other,note:'Paid back'}:{id:uid(),created:Date.now(),type:'transfer',amount:v,date:today(),recvDate:today(),accountId:other,toAccountId:a.id,note:'Paid back'});
 sheet=null;save();toast('Recorded')});
+$('woStart')&&($('woStart').onclick=()=>{woOpen=true;woAmt='';woNote='';renderSheet()});
+$('woCancel')&&($('woCancel').onclick=()=>{woOpen=false;renderSheet()});
+$('woA')&&($('woA').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'');woAmt=e.target.value},$('woA').onchange=()=>renderSheet());
+$('woN')&&($('woN').oninput=e=>{woNote=e.target.value});
+$('woOk')&&($('woOk').onclick=()=>{const bal=owedTo(a.id);const v=Math.round((parseFloat($('woA').value||bal)||0)*100)/100;
+if(!(v>0))return toast('Enter an amount');if(v>bal+0.005)return toast('More than they owe you');
+if(!confirm(`Write off ${money(v,0,c)} from ${pname(a)}? It becomes an expense today and cannot be undone except by deleting that entry.`))return;
+D.txns.push({id:uid(),created:Date.now(),type:'expense',amount:v,date:today(),accountId:a.id,category:'Write-off',note:(woNote||'Written off').trim(),oneOff:true});
+const cats=catsOf('expense',c);if(!cats.includes('Write-off')){D.cats=D.cats||{};D.cats[c]=D.cats[c]||{};D.cats[c].expense=[...cats,'Write-off']}
+woOpen=false;save();renderSheet();toast(money(v,0,c)+' written off')});
 $('editP').onclick=()=>openAccount(a);
 document.querySelectorAll('#sheet [data-txn]').forEach(el=>el.onclick=()=>openTxn(D.txns.find(t=>t.id===el.dataset.txn)));
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
