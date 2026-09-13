@@ -184,7 +184,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='10.8 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='10.9 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -558,7 +558,9 @@ renderSheet()}
 function closeSheet(){sheet=null;renderSheet()}
 function blurActive(){const a=document.activeElement;if(a&&a.blur&&a.tagName!=='BODY')a.blur()}
 (function(){const isTap=e=>{const t=e.target&&e.target.closest?e.target.closest('button,[data-c],[data-who],[data-payer],[data-ac],[data-sm],[data-t],input[type=checkbox],input[type=radio],label'):null;return t&&!(t.tagName==='INPUT'&&['text','number','search','email','password','tel','url','date'].includes((t.type||'').toLowerCase()))};
-['pointerdown','mousedown','touchstart'].forEach(ev=>document.addEventListener(ev,e=>{if(isTap(e))blurActive()},true));
+['pointerdown','mousedown','touchstart'].forEach(ev=>document.addEventListener(ev,e=>{if(!isTap(e))return;blurActive();
+const a=document.activeElement;const wasTyping=a&&a.tagName==='INPUT'&&!['checkbox','radio','button','submit'].includes((a.type||'').toLowerCase());
+if(wasTyping&&e.cancelable)e.preventDefault()},true));
 document.addEventListener('change',e=>{const t=e.target;if(t&&(t.type==='checkbox'||t.type==='radio'))blurActive()},true)})();
 function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';return}
 const prevBox=el.querySelector('.sheet');const prevTop=prevBox?prevBox.scrollTop:null;const af=document.activeElement;const textish=af&&af.tagName==='INPUT'&&!['checkbox','radio','date','button','submit'].includes((af.type||'').toLowerCase());const afId=(textish&&af.id)?af.id:null;const afPos=(textish&&af.selectionStart!=null)?af.selectionStart:null;
@@ -735,7 +737,9 @@ if(rec.length&&!q&&!opt.noRecent)h+=`<div class="muted" style="font-size:11px;ma
 PGROUPS.forEach(function(g){const label=g[0],test=g[1];
 const items=list.filter(a=>test(a));
 if(items.length)h+=`<div class="muted" style="font-size:11px;margin:0 0 4px 4px">${label}</div><div class="card" style="margin-bottom:12px">${items.map(row).join('')}</div>`});
-if(all.some(a=>!spend(a)))h+=`<button class="btn" id="pkAll">${showAll?'Hide':'Show'} investments, loans and people</button>`;
+if(all.some(a=>!spend(a))){const bits=[];if(all.some(a=>isInvest(a)))bits.push('investments');if(all.some(a=>isLoan(a)))bits.push('loans');if(!opt.hidePeople&&all.some(a=>isPerson(a)))bits.push('people');
+const lbl=bits.length>1?bits.slice(0,-1).join(', ')+' and '+bits.slice(-1):(bits[0]||'more');
+h+=`<button class="btn" id="pkAll">${showAll?'Hide':'Show'} ${lbl}</button>`}
 if(opt.type==='payer')h+=`<button class="btn" id="pkNew" style="margin-top:4px">Add a person</button>`;
 if(!list.length&&opt.type!=='payer')h+='<div class="empty" style="padding:24px 0;font-size:13px">Nothing matches.</div>';
 if(!list.length&&opt.type==='payer')h='<div class="empty" style="padding:18px 0;font-size:13px">No people yet<div class="muted" style="font-size:12px;margin-top:4px">Add whoever paid, then pick them here.</div></div>'+h;
@@ -768,9 +772,19 @@ ${inv&&usesUnits(inv)?`<div class="g2">${inv.kind==='gold'?`<label class="field"
 ${amt>0&&u>0?`<div class="note mv" >${money(amt/u,0,fc)} per ${unitLabel(inv).replace(/s$/,'')}${inv.kind==='gold'&&st.purity?` (${PURITY[st.purity||'22'].label})`:''}.</div>`:''}`:''}
 <label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sell" style="width:auto"${st.sell?' checked':''}><span style="font-size:14px">This is a sale (money comes back to me)</span></label>`})():''}
 ${st.type==='transfer'?`${acctField('From','fr',st.accountId,'transfer')}${acctField('To','to',st.toAccountId,'transfer-to',a=>a.id!==st.accountId)}
+${(()=>{const f=acct(st.accountId),t2=acct(st.toAccountId);const pp=isPerson(f)?f:(isPerson(t2)?t2:null);if(!pp)return'';
+const bal=owedTo(pp.id);const liveEl=(typeof document!=='undefined')?document.getElementById('am'):null;const amt=parseFloat(String((liveEl&&liveEl.value)||st.amount||'').replace(/[^0-9.]/g,''))||0;const c2=cur(pp);
+const toPerson=isPerson(t2);
+if(Math.abs(bal)<0.005)return`<div class="note mv">${toPerson?`Money to ${esc(pname(pp))} — they will owe you ${amt>0?money(amt,0,c2):'this'}.`:`Money from ${esc(pname(pp))} — you will owe them ${amt>0?money(amt,0,c2):'this'}.`}</div>`;
+const owesYou=bal>0;const reduces=(owesYou&&!toPerson)||(!owesYou&&toPerson);
+if(!reduces)return`<div class="note mv">${esc(pname(pp))} ${owesYou?'owes you':'is owed'} ${money(Math.abs(bal),0,c2)} — this ${toPerson?'adds to':'adds to'} it${amt>0?`, making it ${money(Math.abs(bal)+amt,0,c2)}`:''}.</div>`;
+const left=Math.abs(bal)-amt;
+return`<div class="note mv">${esc(pname(pp))} ${owesYou?'owes you':'is owed'} ${money(Math.abs(bal),0,c2)} — ${amt<=0?'record a repayment here':left>0.005?`this leaves <b>${money(left,0,c2)}</b> still ${owesYou?'owing':'owed'}`:left<-0.005?`that is <b>${money(-left,0,c2)}</b> more than ${owesYou?'they owe':'you owe'}`:'<b>this clears it</b>'}.</div>`})()}
+
 ${st.toAccountId===st.accountId?'<div class="out" style="font-size:13px;margin:-6px 0 12px">Pick two different accounts.</div>':''}
 ${fx()?`<label class="field"><div>Amount received in ${tc} (${CUR[tc].sym}) — as shown by your bank or transfer app</div><input id="ta" class="num" inputmode="decimal" value="${esc(st.toAmount)}" placeholder="0.00" style="font-size:20px;font-weight:600;color:var(--mv)"></label>
-<div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')}; ${money(ta,0,tc)} lands in ${esc(acct(st.toAccountId)?.name||'…')}.${a>0&&ta>0?` Your rate: 1 ${fc} = ${(ta/a).toLocaleString('en-US',{maximumFractionDigits:2})} ${tc}.`:''}</div>`
+<div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')}; ${money(ta,0,tc)} lands in ${esc(acct(st.toAccountId)?.name||'…')}.${a>0&&ta>0?` Your rate: 1 ${fc} = ${(ta/a).toLocaleString('en-US',{maximumFractionDigits:2})} ${tc}.
+`:''}</div>`
 :`<div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')} and lands in ${esc(acct(st.toAccountId)?.name||'…')}. Net worth stays the same.</div>`}${st.type==='transfer'&&st.pending?'<div class="note out" >Debited now; the receiving account is credited once you mark it received.</div>':''}`
 :st.type==='invest'?'':`${st.type!=='expense'||!st.payer?acctField(st.type==='expense'?'Paid from':'Deposited to','fr',st.accountId,st.type):''}
 <button type="button" class="link" id="moreT" style="display:block;margin:2px 0 12px;font-size:13px">${st.more?"Fewer details":"More details"} › <span class="muted" style="font-size:11px">split, one-off, date, note</span></button><div id="moreBox" style="display:${st.more?"block":"none"}">${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=parseFloat(st.amount)||0;
@@ -804,7 +818,7 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><
 </div><button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';renderSheet()});
-$('am').oninput=e=>{st.amount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.amount;re()};$('am').onkeydown=e=>{if(e.key==='Enter')$('ok').click()};
+$('am').oninput=e=>{if(st.type==='transfer'&&(isPerson(acct(st.accountId))||isPerson(acct(st.toAccountId))))setTimeout(()=>{const n=document.getElementById('am');const v=n?n.value:'';st.amount=String(v).replace(/[^0-9.]/g,'');renderSheet()},400);st.amount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.amount;re()};$('am').onkeydown=e=>{if(e.key==='Enter')$('ok').click()};
 $('fr')&&($('fr').onchange=e=>{st.accountId=e.target.value;renderSheet()});
 document.querySelectorAll('[data-payer]').forEach(b=>b.onclick=()=>{st.payer=b.dataset.payer;renderSheet()});
 document.querySelectorAll('[data-payermore]').forEach(b=>b.onclick=()=>{const back=sheet;
@@ -816,7 +830,7 @@ document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{const parts=b.d
 if(parts[0]==='fr')st.accountId=parts[1];else st.toAccountId=parts[1];
 noteRecent(parts[0]==='to'?'transfer-to':st.type,parts[1]);renderSheet()});
 document.querySelectorAll('[data-acmore]').forEach(b=>b.onclick=()=>{const fld=b.dataset.acmore;const back=sheet;
-openAcctPicker({noRecent:true,hidePeople:st.type==='expense',title:fld==='to'?'To':(st.type==='expense'?'Paid from':st.type==='transfer'?'From':'Deposited to'),
+openAcctPicker({noRecent:true,hidePeople:st.type!=='transfer',title:fld==='to'?'To':(st.type==='expense'?'Paid from':st.type==='transfer'?'From':'Deposited to'),
 current:fld==='fr'?st.accountId:st.toAccountId,type:fld==='to'?'transfer-to':st.type,
 filter:fld==='to'?(a=>a.id!==st.accountId):null,
 onCancel:()=>{sheet=back;renderSheet()},
