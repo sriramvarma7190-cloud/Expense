@@ -184,7 +184,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='10.7 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='10.8 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -203,9 +203,12 @@ if(!ip)return dp;const n=Number(ip);if(!isFinite(n))return ip+dp;
 return n.toLocaleString(grpLocale(c))+dp}
 function wireNum(el,c,onVal){if(!el||el._numWired)return;el._numWired=1;
 const clean=t=>{t=t.replace(/[^0-9.]/g,'');const i=t.indexOf('.');if(i>=0)t=t.slice(0,i+1)+t.slice(i+1).replace(/\./g,'');return t};
-el.addEventListener('input',()=>{const raw=clean(el.value);const endDigits=raw.length-(el.value.slice(0,el.selectionStart||0).replace(/[^0-9.]/g,'').length);
-const shown=groupNum(raw,c);el.value=shown;
-let pos=shown.length;let seen=0;for(let k=shown.length-1;k>=0;k--){if(/[0-9.]/.test(shown[k]))seen++;if(seen>=endDigits){pos=k;break}}
+el.addEventListener('input',()=>{const before=el.value.slice(0,el.selectionStart==null?el.value.length:el.selectionStart);
+const digitsBefore=(before.match(/[0-9.]/g)||[]).length;
+const raw=clean(el.value);const shown=groupNum(raw,c);el.value=shown;
+let pos=shown.length,seen=0;
+for(let k=0;k<shown.length;k++){if(/[0-9.]/.test(shown[k]))seen++;if(seen>=digitsBefore){pos=k+1;break}}
+if(digitsBefore===0)pos=0;
 try{el.setSelectionRange(pos,pos)}catch(e){}
 if(onVal)onVal(raw)});
 el.addEventListener('blur',()=>{el.value=groupNum(el.value,c)})}
@@ -554,12 +557,15 @@ renderSheet()}
 // ---------- sheets ----------
 function closeSheet(){sheet=null;renderSheet()}
 function blurActive(){const a=document.activeElement;if(a&&a.blur&&a.tagName!=='BODY')a.blur()}
+(function(){const isTap=e=>{const t=e.target&&e.target.closest?e.target.closest('button,[data-c],[data-who],[data-payer],[data-ac],[data-sm],[data-t],input[type=checkbox],input[type=radio],label'):null;return t&&!(t.tagName==='INPUT'&&['text','number','search','email','password','tel','url','date'].includes((t.type||'').toLowerCase()))};
+['pointerdown','mousedown','touchstart'].forEach(ev=>document.addEventListener(ev,e=>{if(isTap(e))blurActive()},true));
+document.addEventListener('change',e=>{const t=e.target;if(t&&(t.type==='checkbox'||t.type==='radio'))blurActive()},true)})();
 function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';return}
 const prevBox=el.querySelector('.sheet');const prevTop=prevBox?prevBox.scrollTop:null;const af=document.activeElement;const textish=af&&af.tagName==='INPUT'&&!['checkbox','radio','date','button','submit'].includes((af.type||'').toLowerCase());const afId=(textish&&af.id)?af.id:null;const afPos=(textish&&af.selectionStart!=null)?af.selectionStart:null;
 el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip"></div><div class="head"><b>${sheet.title}</b><button id="cancel">Cancel</button></div>${sheet.body()}</div></div>`;
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')closeSheet()};
 document.getElementById('cancel').onclick=closeSheet;sheet.wire();
-el.querySelectorAll('input[type=checkbox],input[type=radio],button').forEach(b=>{b.addEventListener('pointerdown',blurActive,{passive:true});b.addEventListener('change',blurActive,true);b.addEventListener('click',blurActive,true)});
+
 (function(){const cc=(typeof sheet.cur==='function'?sheet.cur():null)||(typeof R!=='undefined'?R.cur:'USD');
 el.querySelectorAll('input.num[inputmode]').forEach(inp=>{const c=inp.dataset.cur||cc;
 if(inp.value)inp.value=groupNum(inp.value,c);
@@ -636,11 +642,13 @@ ${edit&&edit.currency&&edit.currency!==st.currency&&D.txns.some(t=>t.accountId==
 ${edit&&edit.type==='held'?'<button class="btn" id="settleBtn" style="margin-bottom:10px">Settle up</button>':''}<button class="btn p" id="ok"${st.name.trim()?'':' disabled'}>${edit?'Save changes':'Add account'}</button>${edit?'<button class="btn d" id="del">Remove account</button>':''}`},
 wire(){const $=id=>document.getElementById(id);
 $('an').oninput=e=>{st.name=e.target.value;$('ok').disabled=!st.name.trim()};$('ab').oninput=e=>{st.bank=e.target.value;suggest()};
+if(!window._bankDismiss){window._bankDismiss=1;document.addEventListener('pointerdown',e=>{const b=document.getElementById('bankSug');if(!b||!b.innerHTML)return;
+if(e.target.closest&&(e.target.closest('#bankSug')||e.target.id==='ab'))return;b.innerHTML=''},true)}
 function suggest(){const box=$('bankSug');if(!box)return;const q=st.bank.trim().toLowerCase();if(q.length<2){box.innerHTML='';return}
 const hits=[...IN_BANKS.map(([c,n])=>({n,c:'INR',k:(n+' '+(IN_ALIAS[c]||'')).toLowerCase()})),...BANKS.filter(b=>!b[4]).map(b=>({n:b[0].split('|')[0].replace(/\b\w/g,ch=>ch.toUpperCase()),c:(/\.in$|bank\.in$/.test(b[1]||'')?'INR':'USD'),k:b[0].toLowerCase()}))].filter(x=>x.k.includes(q)).filter((x,i,arr)=>arr.findIndex(y=>y.n.toLowerCase()===x.n.toLowerCase())===i).sort((a,b)=>{const ai=a.k.indexOf(q),bi=b.k.indexOf(q);return(ai<0?99:ai)-(bi<0?99:bi)||a.n.length-b.n.length}).slice(0,6);
 if(!hits.length||(hits.length===1&&hits[0].n.toLowerCase()===q)){box.innerHTML='';return}
 box.innerHTML=`<div class="card" style="position:absolute;left:0;right:0;top:4px;z-index:5;max-height:230px;overflow:auto">${hits.map((h,i)=>`<div class="row" data-bs="${i}" style="padding:9px 12px;gap:10px">${logoEl({bank:h.n,name:h.n},26)}<div class="main"><div class="t" style="font-size:14px">${esc(h.n)}</div></div></div>`).join('')}</div>`;
-box.querySelectorAll('[data-bs]').forEach(el=>el.onclick=()=>{const pick=hits[+el.dataset.bs];grab();st.bank=pick.n;
+box.querySelectorAll('[data-bs]').forEach(el=>el.onclick=()=>{const pick=hits[+el.dataset.bs];box.innerHTML='';grab();st.bank=pick.n;
 if(!edit&&pick.c&&CUR[pick.c]&&st.currency!==pick.c){st.currency=pick.c}
 renderSheet()})}
 $('logoShow')&&($('logoShow').onclick=()=>{grab();st.showLogo=true;renderSheet()});
@@ -712,7 +720,7 @@ const rKey=t=>'ledger-recent-'+(t||'expense');
 function recentAccts(type){try{return JSON.parse(localStorage.getItem(rKey(type))||'[]')}catch(e){return[]}}
 function noteRecent(type,id){if(!id)return;const l=recentAccts(type).filter(x=>x!==id);l.unshift(id);localStorage.setItem(rKey(type),JSON.stringify(l.slice(0,3)))}
 const PGROUPS=[['Checking & savings',a=>['checking','savings','cash'].includes(a.type)],['Credit cards',a=>a.type==='credit'],['People',a=>isPerson(a)],['Investments',a=>isInvest(a)],['Loans',a=>isLoan(a)]];
-function openAcctPicker(opt){let showAll=false,q='';const all=D.accounts.filter(a=>!opt.filter||opt.filter(a));
+function openAcctPicker(opt){let showAll=false,q='';const all=D.accounts.filter(a=>(!opt.filter||opt.filter(a))&&!(opt.hidePeople&&isPerson(a)));
 sheet={title:opt.title||'Choose an account',body(){const b=balances();
 const spend=a=>SPENDT.includes(a.type)||(opt.withPeople&&isPerson(a));
 const pool=all.filter(a=>showAll||spend(a)||a.id===opt.current);
@@ -782,7 +790,7 @@ ${sel.length?`<div class="seg" style="grid-template-columns:repeat(4,1fr);margin
 ${(mode==='custom'||mode==='pct')?sel.map(id=>{const a=acct(id);return`<div style="display:flex;align-items:center;gap:10px;padding:6px 0">${logoEl(a,28)}<span style="flex:1;min-width:0;font-size:14px">${esc(pname(a))}</span><input class="num" data-sv="${id}" inputmode="decimal" value="${mode==='pct'?(st.pct?.[id]??''):(st.amt?.[id]??'')}" placeholder="${mode==='pct'?'%':'0.00'}" style="width:104px;text-align:right;padding:8px 10px;font-size:15px"></div>`}).join(''):sel.map(id=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0"><span style="flex:1;font-size:14px">${esc(pname(acct(id)))}</span><span class="num" style="font-size:14px">${money(shares[id]||0,0,fc)}</span></div>`).join('')}
 <div style="display:flex;align-items:center;gap:10px;padding:8px 0 4px;border-top:1px solid var(--line);margin-top:4px"><span style="flex:1;font-size:14px">Your share</span><b class="num" style="font-size:14px">${money(mine,0,fc)}</b></div>
 <div class="note ${over?'out':'mv'}" style="background:var(--${over?'outS':'mvS'});margin:6px 0 0">${over?`Shares add up to ${money(owed,0,fc)} — more than the ${money(amt,0,fc)} bill.`:`${money(amt,0,fc)} bill · ${money(owed,0,fc)} owed to you · ${money(mine,0,fc)} yours`}</div>`
-:'<div class="muted" style="font-size:13px">Tap the people who were in on this bill.</div>'}</div>`:''}`})():''}
+:'<div class="muted" style="font-size:13px">Tap the people who were in on this bill — then choose how to split it.</div>'}</div>`:''}`})():''}
 ${st.type==='expense'||st.type==='income'?(()=>{const amt=parseFloat(st.amount)||0;const catOn=st.category&&oneOffCats().includes(st.category);
 const hist=D.txns.filter(t=>t.type===st.type&&t.category===st.category&&cur(acct(t.accountId))===fc&&t.id!==edit?.id).map(t=>t.amount);
 const avg=hist.length?hist.reduce((a,b)=>a+b,0)/hist.length:0;const big=avg>0&&amt>avg*3;
@@ -808,7 +816,7 @@ document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{const parts=b.d
 if(parts[0]==='fr')st.accountId=parts[1];else st.toAccountId=parts[1];
 noteRecent(parts[0]==='to'?'transfer-to':st.type,parts[1]);renderSheet()});
 document.querySelectorAll('[data-acmore]').forEach(b=>b.onclick=()=>{const fld=b.dataset.acmore;const back=sheet;
-openAcctPicker({noRecent:true,title:fld==='to'?'To':(st.type==='expense'?'Paid from':st.type==='transfer'?'From':'Deposited to'),
+openAcctPicker({noRecent:true,hidePeople:st.type==='expense',title:fld==='to'?'To':(st.type==='expense'?'Paid from':st.type==='transfer'?'From':'Deposited to'),
 current:fld==='fr'?st.accountId:st.toAccountId,type:fld==='to'?'transfer-to':st.type,
 filter:fld==='to'?(a=>a.id!==st.accountId):null,
 onCancel:()=>{sheet=back;renderSheet()},
