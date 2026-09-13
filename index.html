@@ -179,7 +179,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='9.11 · Sep 12 2026';
+const KEY='ledger-v1';const VERSION='9.12 · Sep 12 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -298,6 +298,10 @@ const daily=out*((a.rate||0)/100)/basis;
 const emi=a.emi||0;let months=null,totInt=0;
 if(emi>0&&out+accr>0){let bal=out+accr,m=0;while(bal>0&&m<600){const int=bal*((a.rate||0)/100)/12;if(emi<=int){m=null;break}bal=bal+int-emi;totInt+=int;m++}months=m}
 return{out:out+accr,principalOut:out,accrued:accr,paidPrincipal:pi,paidInterest:ti,daily,months,totInt,payments:byPay.reverse()}}
+function undoToast(msg,restore){clearTimeout(UT);UNDO=restore;const el=document.getElementById('toast');
+el.innerHTML=`<div class="toast" style="pointer-events:auto;display:flex;align-items:center;gap:14px">${esc(msg)}<button id="undoBtn" style="background:none;border:0;color:var(--accent);font:inherit;font-weight:600;padding:0;cursor:pointer">Undo</button></div>`;
+document.getElementById('undoBtn').onclick=()=>{if(UNDO){UNDO();UNDO=null}clearTimeout(UT);el.innerHTML='';save();render();toast('Restored')};
+UT=setTimeout(()=>{el.innerHTML='';UNDO=null},6000)}
 let tt;function toast(m){const el=document.getElementById('toast');el.innerHTML=`<div class="toast">${esc(m)}</div>`;clearTimeout(tt);tt=setTimeout(()=>el.innerHTML='',1800)}
 
 // ---------- rows ----------
@@ -372,7 +376,7 @@ ${transit.length?`<div class="sec">In transit<span class="r">not yet credited</s
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
 
 let F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};
-let BACK=null;let SEL=null;
+let BACK=null;let SEL=null;let UNDO=null,UT=null;
 function goBack(){if(!BACK)return;const b=BACK;BACK=null;tab=b.tab;R.cur=b.cur;R.month=b.month||R.month;R.catOpen=b.catOpen;R.chartMode=b.chartMode;F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};render();setTimeout(()=>window.scrollTo(0,b.y||0),0)}
 const clearFilters=()=>{F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false}};
 const markBack=()=>{BACK={tab,cur:R.cur,month:R.month,catOpen:R.catOpen,chartMode:R.chartMode,y:window.scrollY||0}};
@@ -417,7 +421,7 @@ ${F.all?'':curToggle()}<div class="qwrap" style="margin-top:10px"><input id="q" 
 ${(()=>{const rec=(D.recent||[]),sav=(D.saved||[]);if(!rec.length&&!sav.length)return'';
 return`<div style="margin-top:8px">${sav.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Saved</div><div class="chips" style="margin-bottom:8px">${sav.map((f,i)=>`<button type="button" data-sf="${i}" style="background:var(--mvS);border-color:var(--mvBd);color:var(--mv)">${esc(fLabel(f))}</button>`).join('')}</div>`:''}
 ${rec.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Recent</div><div class="chips" style="margin-bottom:4px">${rec.map((f,i)=>`<button type="button" data-rf="${i}">${esc(fLabel(f))}</button>`).join('')}</div>`:''}</div>`})()}
-<div class="filters"><select id="fa"><option value="all">All accounts</option>${D.accounts.filter(a=>cur(a)===c).map(a=>`<option value="${a.id}"${F.acct===a.id?' selected':''}>${esc(a.name)}</option>`).join('')}</select><select id="ft">${[['all','All types'],['expense','Expenses'],['income','Income'],['transfer','Transfers']].map(([v,l])=>`<option value="${v}"${F.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
+<div class="filters"><button class="btn" id="faBtn" style="text-align:left;font-size:14px;padding:9px 12px">${F.acct==='all'?'All accounts':esc(acct(F.acct)?.name||'All accounts')} ›</button><select id="fa" style="display:none"><option value="all">All accounts</option>${D.accounts.filter(a=>cur(a)===c).map(a=>`<option value="${a.id}"${F.acct===a.id?' selected':''}>${esc(a.name)}</option>`).join('')}</select><select id="ft">${[['all','All types'],['expense','Expenses'],['income','Income'],['transfer','Transfers']].map(([v,l])=>`<option value="${v}"${F.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
 ${F.all?rateLine('Amounts')+'':''}
 ${F.cat||F.month||F.year||F.oneOff||F.all?`<div class="tools"><button class="btn" id="clearF" style="background:var(--mvS);color:var(--mv)">${F.all?(F.cat?esc(F.cat)+' · all currencies':'All currencies'):F.oneOff?'One-offs':F.month?mlabel(F.month):F.year?F.year:'All time'}${F.cat?' · '+esc(F.cat):''} &nbsp;×</button></div>`:''}
 <div class="tools"><button class="btn" id="exp">Export CSV</button><button class="btn" id="imp">Import CSV</button><input type="file" id="impFile" accept=".csv,text/csv" hidden></div>
@@ -454,7 +458,7 @@ v.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>openPerson(acct(b.d
 v.querySelector('#mgGroups')?.addEventListener('click',()=>openGroups(ensureCur()));
 v.querySelector('#revClose')?.addEventListener('click',()=>{D.settings.reviewSeen=[...(D.settings.reviewSeen||[]),reviewDue()].filter(Boolean);save()});
 v.querySelector('#revOpen')?.addEventListener('click',()=>{const last=reviewDue();markBack();R.month=last;tab='reports';render();window.scrollTo(0,0)});
-v.querySelectorAll('[data-dupdel]').forEach(b=>b.onclick=()=>{D.txns=D.txns.filter(t=>t.id!==b.dataset.dupdel);save();toast('Duplicate removed')});
+v.querySelectorAll('[data-dupdel]').forEach(b=>b.onclick=()=>{const id=b.dataset.dupdel;const gone=D.txns.filter(t=>t.id===id);D.txns=D.txns.filter(t=>t.id!==id);save();render();undoToast('Duplicate removed',()=>{D.txns=D.txns.concat(gone)})});
 v.querySelectorAll('[data-dupok]').forEach(b=>b.onclick=()=>{D.settings.dupOk=[...(D.settings.dupOk||[]),b.dataset.dupok];save();toast('Kept both')});
 v.querySelector('#staleBk')?.addEventListener('click',()=>{if(pass&&FBuser)cloudPush();else openCloud()});
 v.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>{R.open[b.dataset.grp]=!R.open[b.dataset.grp];render()});
@@ -467,7 +471,7 @@ v.querySelectorAll('[data-acct]').forEach(el=>el.onclick=()=>{const a=acct(el.da
 wireList(v);
 v.querySelector('#selCancel')?.addEventListener('click',()=>{SEL=null;render()});
 v.querySelector('#selStart')?.addEventListener('click',()=>{SEL=[];render()});
-v.querySelector('#selDel')?.addEventListener('click',()=>{if(!confirm(`Delete ${SEL.length} transaction${SEL.length===1?'':'s'}? This cannot be undone.`))return;D.txns=D.txns.filter(t=>!SEL.includes(t.id));SEL=null;save();toast('Deleted')});
+v.querySelector('#selDel')?.addEventListener('click',()=>{const ids=[...SEL];const gone=D.txns.filter(t=>ids.includes(t.id));D.txns=D.txns.filter(t=>!ids.includes(t.id));SEL=null;save();render();undoToast(gone.length+' transaction'+(gone.length===1?'':'s')+' deleted',()=>{D.txns=D.txns.concat(gone)})});
 v.querySelector('#selOne')?.addEventListener('click',()=>{D.txns.forEach(t=>{if(SEL.includes(t.id))t.oneOff=true});SEL=null;save();toast('Marked as one-off')});
 v.querySelector('#selCat')?.addEventListener('click',()=>{const cc=cur(acct(D.txns.find(t=>t.id===SEL[0])?.accountId))||baseCur();
 sheet={title:'Change category',body(){return`<div class="muted" style="margin-bottom:10px">${SEL.length} transaction${SEL.length===1?'':'s'} → pick a category</div><div class="chips">${catsOf('expense',cc).map(k=>`<button type="button" data-bc="${esc(k)}">${esc(k)}</button>`).join('')}</div>`},
@@ -481,7 +485,10 @@ if(id.startsWith('loan:')){const a=acct(id.slice(5));a.skipDue=a.skipDue||[];if(
 wireQBtns();
 const q=v.querySelector('#q');if(q){q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();q.blur();commitQ()}};
 q.oninput=e=>{F.q=e.target.value;clearTimeout(LT);LT=setTimeout(refreshList,140)}}
-v.querySelector('#fa')?.addEventListener('change',e=>{F.acct=e.target.value;render();rememberSearch(document.querySelectorAll('[data-txn]').length)});
+v.querySelector('#faBtn')?.addEventListener('click',()=>{const back=tab;
+openAcctPicker({title:'Filter by account',current:F.acct==='all'?null:F.acct,type:'filter',
+onCancel:()=>{sheet=null;render()},
+onPick:id=>{F.acct=id;sheet=null;render();rememberSearch(document.querySelectorAll('[data-txn]').length)}})});
 v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render();rememberSearch(document.querySelectorAll('[data-txn]').length)});
 v.querySelector('#backBtn')?.addEventListener('click',goBack);
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
@@ -644,6 +651,42 @@ if(edit)D.accounts=D.accounts.map(x=>x.id===a.id?a:x);else D.accounts.push(a);sh
 $('del')&&($('del').onclick=()=>{if(!confirm('Remove this account and every transaction on it?'))return;D.accounts=D.accounts.filter(a=>a.id!==edit.id);D.txns=D.txns.filter(t=>t.accountId!==edit.id&&t.toAccountId!==edit.id);sheet=null;save();toast('Account removed')});
 if(!edit)$('an').focus()}};renderSheet()}
 
+// ---------- account picker ----------
+const SPENDT=['checking','savings','cash','credit'];
+const rKey=t=>'ledger-recent-'+(t||'expense');
+function recentAccts(type){try{return JSON.parse(localStorage.getItem(rKey(type))||'[]')}catch(e){return[]}}
+function noteRecent(type,id){if(!id)return;const l=recentAccts(type).filter(x=>x!==id);l.unshift(id);localStorage.setItem(rKey(type),JSON.stringify(l.slice(0,3)))}
+const PGROUPS=[['Checking & savings',a=>['checking','savings','cash'].includes(a.type)],['Credit cards',a=>a.type==='credit'],['People',a=>isPerson(a)],['Investments',a=>isInvest(a)],['Loans',a=>isLoan(a)]];
+function openAcctPicker(opt){let showAll=false,q='';const all=D.accounts.filter(a=>!opt.filter||opt.filter(a));
+sheet={title:opt.title||'Choose an account',body(){const b=balances();
+const spend=a=>SPENDT.includes(a.type)||isPerson(a);
+const pool=all.filter(a=>showAll||spend(a)||a.id===opt.current);
+const list=q?pool.filter(a=>[a.name,a.bank,cur(a)].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())):pool;
+const row=a=>{const v=isInvest(a)?(investValue(a)!=null?investValue(a):holdings(a).net):(a.type==='credit'?(a.closeDay?-cardState(a).total:b[a.id]):b[a.id]);
+return`<div class="row" data-pick="${a.id}" style="${a.id===opt.current?'background:var(--mvS)':''}">${logoEl(a,26)}<div class="main"><div class="t" style="font-size:14px">${esc(a.name)} <span class="muted" style="font-size:11px">${cur(a)}</span></div>${a.bank?`<div class="s">${esc(a.bank)}</div>`:''}</div><div class="amt num ${v<0?'out':''}" style="font-size:13px">${money(v,0,cur(a))}</div></div>`};
+const recIds=recentAccts(opt.type);const rec=recIds.map(id=>list.find(a=>a.id===id)).filter(Boolean);
+let h='';
+if(opt.type==='filter')h+=`<div class="card" style="margin-bottom:12px"><div class="row" data-pick="all"><div class="main"><div class="t" style="font-size:14px">All accounts</div></div></div></div>`;
+if(all.length>8)h+=`<label class="field"><input id="pkQ" placeholder="Search accounts" value="${esc(q)}"></label>`;
+if(rec.length&&!q)h+=`<div class="muted" style="font-size:11px;margin:0 0 4px 4px">Recent</div><div class="card" style="margin-bottom:12px">${rec.map(row).join('')}</div>`;
+PGROUPS.forEach(function(g){const label=g[0],test=g[1];
+const items=list.filter(a=>test(a)&&!(!q&&recIds.includes(a.id)));
+if(items.length)h+=`<div class="muted" style="font-size:11px;margin:0 0 4px 4px">${label}</div><div class="card" style="margin-bottom:12px">${items.map(row).join('')}</div>`});
+if(!showAll&&all.some(a=>!spend(a)))h+=`<button class="btn" id="pkAll">Show investments, loans and people</button>`;
+if(!list.length)h+='<div class="empty" style="padding:24px 0;font-size:13px">Nothing matches.</div>';
+return h},
+wire(){const g=id=>document.getElementById(id);
+g('pkQ')&&(g('pkQ').oninput=e=>{q=e.target.value;const p2=e.target.selectionStart;renderSheet();const n=document.getElementById('pkQ');if(n){n.focus({preventScroll:true});n.setSelectionRange(p2,p2)}});
+g('pkAll')&&(g('pkAll').onclick=()=>{showAll=true;renderSheet()});
+document.querySelectorAll('[data-pick]').forEach(el=>el.onclick=()=>{noteRecent(opt.type,el.dataset.pick);opt.onPick(el.dataset.pick)});
+document.getElementById('cancel').onclick=()=>{if(opt.onCancel)opt.onCancel();else{sheet=null;render()}}}};renderSheet()}
+function acctField(label,fld,current,type,filter){const all=D.accounts.filter(a=>!filter||filter(a));
+const rec=recentAccts(type).map(x=>all.find(a=>a.id===x)).filter(Boolean);
+const ids=[];[current].concat(rec.map(a=>a.id)).forEach(x=>{if(x&&ids.indexOf(x)<0&&all.some(a=>a.id===x))ids.push(x)});
+const chips=ids.slice(0,3).map(x=>all.find(a=>a.id===x));
+const a=acct(current);
+return`<div class="field"><div>${label}</div><div class="chips" style="margin-top:2px">${chips.map(x=>`<button type="button" data-ac="${fld}|${x.id}" style="display:inline-flex;align-items:center;gap:6px;${x.id===current?'background:var(--mvS);border-color:var(--mvBd);color:var(--mv)':''}">${logoEl(x,18)}${esc(x.name)}</button>`).join('')}<button type="button" data-acmore="${fld}" style="border-style:dashed">${chips.length?'More':'Choose account'} ›</button></div>${a?`<div class="muted" style="font-size:11px;margin-top:4px">${esc(a.name)} · ${cur(a)}${a.bank?' · '+esc(a.bank):''}</div>`:'<div class="muted" style="font-size:11px;margin-top:4px">No account chosen yet</div>'}</div>`}
+
 function openTxn(edit,preset,onSaved){if(!D.accounts.length)return openAccount();if(!edit&&preset)edit=null;const P=preset||{};
 const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,oneOff:!!edit?.oneOff,split:!!(edit?.who&&edit.who.length)||!!P.split,who:edit?.who?[...edit.who]:(P.who?[...P.who]:[]),mode:edit?.smode||'even',amt:edit?.amt?{...edit.amt}:{},pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||D.accounts[0].id,toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
 const fx=()=>st.type==='transfer'&&st.toAccountId&&cur(acct(st.accountId))!==cur(acct(st.toAccountId));
@@ -653,17 +696,17 @@ sheet={title:edit?'Edit transaction':'New transaction',body(){const cls=st.type=
 return`<div class="seg" style="grid-template-columns:repeat(${D.accounts.some(isInvest)?4:3},1fr)">${[['expense','Expense','out'],['income','Income','in'],['transfer','Transfer','mv']].concat(D.accounts.some(isInvest)?[['invest','Invest','mv']]:[]).map(([v,l,c])=>`<button data-t="${v}" class="${st.type===v?'on '+c:''}">${l}</button>`).join('')}</div>
 <div class="amtrow"><span class="${cls}">${CUR[fc].sym}</span><input id="am" class="num ${cls}" inputmode="decimal" value="${esc(st.amount)}" placeholder="0.00"></div>
 ${st.type==='invest'?(()=>{const iv=D.accounts.filter(a=>isInvest(a)&&cur(a)===fc);const inv=acct(st.toAccountId);const amt=parseFloat(st.amount)||0;const u=parseFloat(st.units)||0;
-return`<div class="g2"><label class="field"><div>${st.sell?'Sell from':'Paid from'}</div><select id="fr">${opts(st.accountId)}</select></label><label class="field"><div>${st.sell?'Money into':'Invest in'}</div><select id="to"><option value="">Choose…</option>${iv.map(a=>`<option value="${a.id}"${st.toAccountId===a.id?' selected':''}>${esc(a.name)} · ${KINDS[a.kind]}</option>`).join('')}</select></label></div>
+return`${acctField(st.sell?'Sell from':'Paid from','fr',st.accountId,st.type)}<div class="g2"><label class="field"><div>${st.sell?'Money into':'Invest in'}</div><select id="to"><option value="">Choose…</option>${iv.map(a=>`<option value="${a.id}"${st.toAccountId===a.id?' selected':''}>${esc(a.name)} · ${KINDS[a.kind]}</option>`).join('')}</select></label></div>
 ${!iv.length?`<div class="note out" >No ${fc} investment accounts yet — add one from Menu › Investments.</div>`:''}
 ${inv&&usesUnits(inv)?`<div class="g2">${inv.kind==='gold'?`<label class="field"><div>Purity</div><select id="pu">${Object.entries(PURITY).map(([k,v])=>`<option value="${k}"${(st.purity||'22')===k?' selected':''}>${v.label}</option>`).join('')}</select></label>`:''}<label class="field"><div>${unitLabel(inv)[0].toUpperCase()+unitLabel(inv).slice(1)}</div><input id="un" class="num" inputmode="decimal" value="${esc(st.units)}" placeholder="0.000"></label></div>
 ${amt>0&&u>0?`<div class="note mv" >${money(amt/u,0,fc)} per ${unitLabel(inv).replace(/s$/,'')}${inv.kind==='gold'&&st.purity?` (${PURITY[st.purity||'22'].label})`:''}.</div>`:''}`:''}
 <label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sell" style="width:auto"${st.sell?' checked':''}><span style="font-size:14px">This is a sale (money comes back to me)</span></label>`})():''}
-${st.type==='transfer'?`<div class="g2"><label class="field"><div>From</div><select id="fr">${opts(st.accountId)}</select></label><label class="field"><div>To</div><select id="to"><option value="">Choose…</option>${opts(st.toAccountId)}</select></label></div>
+${st.type==='transfer'?`${acctField('From','fr',st.accountId,'transfer')}${acctField('To','to',st.toAccountId,'transfer-to',a=>a.id!==st.accountId)}
 ${st.toAccountId===st.accountId?'<div class="out" style="font-size:13px;margin:-6px 0 12px">Pick two different accounts.</div>':''}
 ${fx()?`<label class="field"><div>Amount received in ${tc} (${CUR[tc].sym}) — as shown by your bank or transfer app</div><input id="ta" class="num" inputmode="decimal" value="${esc(st.toAmount)}" placeholder="0.00" style="font-size:20px;font-weight:600;color:var(--mv)"></label>
 <div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')}; ${money(ta,0,tc)} lands in ${esc(acct(st.toAccountId)?.name||'…')}.${a>0&&ta>0?` Your rate: 1 ${fc} = ${(ta/a).toLocaleString('en-US',{maximumFractionDigits:2})} ${tc}.`:''}</div>`
 :`<div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')} and lands in ${esc(acct(st.toAccountId)?.name||'…')}. Net worth stays the same.</div>`}${st.type==='transfer'&&st.pending?'<div class="note out" >Debited now; the receiving account is credited once you mark it received.</div>':''}`
-:st.type==='invest'?'':`<label class="field"><div>${st.type==='expense'?'Paid from':'Deposited to'}</div><select id="fr">${opts(st.accountId)}</select></label>
+:st.type==='invest'?'':`${acctField(st.type==='expense'?'Paid from':'Deposited to','fr',st.accountId,st.type)}
 ${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=parseFloat(st.amount)||0;
 const sel=(st.who||[]).filter(id=>acct(id));const mode=st.mode||'even';
 const shares={};if(sel.length){if(mode==='even'){const each=Math.floor(amt/(sel.length+1)*100)/100;sel.forEach(id=>shares[id]=each)}
@@ -695,7 +738,16 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';renderSheet()});
 $('am').oninput=e=>{st.amount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.amount;re()};$('am').onkeydown=e=>{if(e.key==='Enter')$('ok').click()};
-$('fr').onchange=e=>{st.accountId=e.target.value;renderSheet()};
+$('fr')&&($('fr').onchange=e=>{st.accountId=e.target.value;renderSheet()});
+document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{const parts=b.dataset.ac.split('|');
+if(parts[0]==='fr')st.accountId=parts[1];else st.toAccountId=parts[1];
+noteRecent(parts[0]==='to'?'transfer-to':st.type,parts[1]);renderSheet()});
+document.querySelectorAll('[data-acmore]').forEach(b=>b.onclick=()=>{const fld=b.dataset.acmore;const back=sheet;
+openAcctPicker({title:fld==='to'?'To':(st.type==='expense'?'Paid from':st.type==='transfer'?'From':'Deposited to'),
+current:fld==='fr'?st.accountId:st.toAccountId,type:fld==='to'?'transfer-to':st.type,
+filter:fld==='to'?(a=>a.id!==st.accountId):null,
+onCancel:()=>{sheet=back;renderSheet()},
+onPick:id=>{if(fld==='fr')st.accountId=id;else st.toAccountId=id;sheet=back;renderSheet()}})});
 $('to')&&($('to').onchange=e=>{st.toAccountId=e.target.value;renderSheet()});
 $('un')&&($('un').oninput=e=>{st.units=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.units;re()},$('un').onchange=()=>renderSheet());
 $('pu')&&($('pu').onchange=e=>{st.purity=e.target.value;renderSheet()});
@@ -734,7 +786,7 @@ Object.entries(sh).forEach(([pid,v])=>{if(v>0)D.txns.push({id:uid(),created:Date
 sheet=null;save();toast(`Split saved — ${money(mine,0,cur(acct(st.accountId)))} yours, ${money(owed,0,cur(acct(st.accountId)))} owed to you`);return}
 const t={id:edit?.id||uid(),created:edit?.created||Date.now(),oneOff:st.oneOff||undefined,type:st.type,amount:Math.round(parseFloat(st.amount)*100)/100,toAmount:fx()?Math.round(parseFloat(st.toAmount)*100)/100:undefined,date:st.date,recvDate:st.type==='transfer'&&!st.pending?(st.recvDate||st.date):undefined,pending:st.type==='transfer'&&st.pending?true:undefined,accountId:st.accountId,toAccountId:st.type==='transfer'?st.toAccountId:undefined,category:st.type==='transfer'?undefined:st.category,note:st.note.trim()};
 if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);sheet=null;if(onSaved)onSaved(t);save();toast(t.type==='transfer'?'Transfer recorded':edit?'Saved':'Added')};
-$('del')&&($('del').onclick=()=>{D.txns=D.txns.filter(t=>t.id!==edit.id);sheet=null;save();toast('Deleted')});
+$('del')&&($('del').onclick=()=>{const gone=D.txns.filter(t=>t.id===edit.id);D.txns=D.txns.filter(t=>t.id!==edit.id);sheet=null;save();render();undoToast('Transaction deleted',()=>{D.txns=D.txns.concat(gone)})});
 if(!edit&&!st.amount)$('am').focus()}};renderSheet()}
 
 // ---------- CSV ----------
