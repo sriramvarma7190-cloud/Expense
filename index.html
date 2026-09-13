@@ -184,7 +184,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='10.9 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='11.0 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -815,7 +815,7 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><
 <label class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px"><input type="checkbox" id="pend" style="width:auto"${st.pending?' checked':''}><span style="font-size:14px">Not received yet — keep it in transit</span></label>
 <label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Wise, Remitly, purpose…"></label>`
 :`<label class="field"><div>Date</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Where, what, who"></label>`}
-</div><button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
+<button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';renderSheet()});
 $('am').oninput=e=>{if(st.type==='transfer'&&(isPerson(acct(st.accountId))||isPerson(acct(st.toAccountId))))setTimeout(()=>{const n=document.getElementById('am');const v=n?n.value:'';st.amount=String(v).replace(/[^0-9.]/g,'');renderSheet()},400);st.amount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.amount;re()};$('am').onkeydown=e=>{if(e.key==='Enter')$('ok').click()};
