@@ -179,7 +179,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='10.0 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='10.1 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -382,16 +382,16 @@ if(days<3)return'';
 return`<div class="card" style="margin-bottom:10px;padding:12px 14px;background:var(--outS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="flex:1"><div style="font-weight:500;font-size:14px;color:var(--out)">${m.at?`Last backed up ${days} days ago`:'Not backed up yet'}</div><div class="muted" style="font-size:12px;margin-top:2px">${pass?'Tap to back up now.':'Enter your passphrase to resume backups.'}</div></div><button class="btn" id="staleBk" style="width:auto;padding:9px 14px;font-size:13px">${pass?'Back up':'Open'}</button></div></div>`})()}
 </div>${noticeTrim()}
 ${(()=>{const gl=D.goals.filter(g=>g.currency===c);const wt=targetIn(c);
-if(!wt&&!gl.length)return`<div class="sec" style="padding-right:46px">Goals<span class="r"><button class="link" id="addGoalH">Create goal</button></span></div>
+if(!wt&&!gl.length)return`<div class="sec">Goals<span class="r"><button class="link" id="addGoalH" style="font-size:12px">Create goal</button></span></div>
 <div class="card"><div class="empty" style="padding:22px 16px;font-size:13px;text-align:center">No goals yet<div class="muted" style="font-size:12px;margin-top:4px">Name an amount and a date; the app works out the monthly figure. Or set a wealth target to see when you reach a number.</div><div class="tools" style="justify-content:center;margin-top:12px"><button class="btn p" id="addGoalE" style="width:auto">Create a goal</button><button class="btn" id="setWealthE" style="width:auto">Wealth target</button></div></div></div>`;
 const wp=wt?project(wt,{window:+(D.settings.wWin||6),includeInvest:D.settings.wInv!==false,extra:(+(D.settings.wExtra||0))+((D.settings.wCuts||[]).reduce((a,x)=>a+(+x.v||0),0))}):null;
-return`<div class="sec" style="padding-right:46px">Goals<span class="r"><button class="link" id="addGoalH">Create goal</button></span></div>
+return`<div class="sec">Goals<span class="r"><button class="link" id="addGoalH" style="font-size:12px">Create goal</button></span></div>
 <div class="card">${wt?`<div class="brow" id="wealthCard" style="cursor:pointer"><div class="l"><span><b>Wealth target</b> <span class="muted" style="font-size:11px">everything you own</span></span><span class="num">${wp.hit==null?'—':mLabel(wp.hit)}</span></div>
 <div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--accent)'}"></i></div>
 <div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,c)} of ${money(wt,0,c)}${wp.debtFree!=null&&wp.debtFree>0?' · debt-free '+mLabel(wp.debtFree):''}</div></div>`:''}
 ${gl.map(g=>goalCard(g)).join('')}</div>`})()}
 ${transit.length?`<div class="sec">In transit<span class="r">not yet credited</span></div><div class="card">${transit.map(t=>txnRow(t,1)).join('')}</div>`:''}
-<div class="sec" style="padding-right:46px">Accounts<span class="r"><button class="link" id="addAcct" style="font-size:12px">Add account</button></span></div>
+<div class="sec">Accounts<span class="r"><button class="link" id="addAcct" style="font-size:12px">Add account</button></span></div>
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
 
 let F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};
@@ -759,7 +759,7 @@ ${big&&!st.oneOff&&!catOn?`<div class="note mv" style="margin-bottom:12px">This 
 ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Received on</div><input id="rd" type="date" value="${st.pending?'':(st.recvDate||st.date)}"${st.pending?' disabled':''}></label></div>
 <label class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px"><input type="checkbox" id="pend" style="width:auto"${st.pending?' checked':''}><span style="font-size:14px">Not received yet — keep it in transit</span></label>
 <label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Wise, Remitly, purpose…"></label>`
-:`<div class="g2"><label class="field"><div>Date</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Where, what, who"></label></div>`}
+:`<label class="field"><div>Date</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Where, what, who"></label>`}
 </div><button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';renderSheet()});
@@ -960,11 +960,12 @@ const dirty=()=>{list.forEach((_,i)=>{const el=document.querySelector(`[data-i="
 const sw=(k,cc)=>{if(dirty()&&!confirm('Leave without saving these changes?'))return;sheet=prev;openCats(k,null,cc)};
 document.querySelectorAll('[data-cc]').forEach(b=>b.onclick=()=>sw(kind,b.dataset.cc));document.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>sw(b.dataset.ck,c));
 document.querySelectorAll('[data-i]').forEach(inp=>inp.oninput=e=>{list[+inp.dataset.i]=e.target.value});
-const rerender=()=>{list.forEach((_,i)=>{const el=document.querySelector(`[data-i="${i}"]`);if(el)list[i]=el.value});newName=$('newCat').value;renderSheet()};
-document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const i=+b.dataset.up;[list[i-1],list[i]]=[list[i],list[i-1]];rerender()});
-document.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{const i=+b.dataset.dn;[list[i+1],list[i]]=[list[i],list[i+1]];rerender()});
-document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{list.splice(+b.dataset.rm,1);rerender()});
-const add=()=>{const v=$('newCat').value.trim();if(!v)return;if(list.some(x=>x.trim().toLowerCase()===v.toLowerCase())){toast('Already in the list');return}list.push(v);newName='';rerender();setTimeout(()=>document.getElementById('newCat')?.focus(),0)};
+const sync=()=>{list.forEach((_,i)=>{const el=document.querySelector(`[data-i="${i}"]`);if(el)list[i]=el.value});const n=document.getElementById('newCat');if(n)newName=n.value};
+const rerender=()=>{sync();renderSheet()};
+document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{sync();const i=+b.dataset.up;if(i<1)return;[list[i-1],list[i]]=[list[i],list[i-1]];renderSheet()});
+document.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{sync();const i=+b.dataset.dn;if(i>=list.length-1)return;[list[i+1],list[i]]=[list[i],list[i+1]];renderSheet()});
+document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();list.splice(+b.dataset.rm,1);renderSheet()});
+const add=()=>{sync();const v=$('newCat').value.trim();if(!v)return;if(list.some(x=>x.trim().toLowerCase()===v.toLowerCase())){toast('Already in the list');return}list.push(v);newName='';renderSheet();setTimeout(()=>document.getElementById('newCat')?.focus(),0)};
 $('addCat').onclick=add;$('newCat').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();add()}};
 $('ok').onclick=()=>{const orig=catsOf(kind,c);const clean=list.map(x=>x.trim()).filter(Boolean);
 const seen=new Set();for(const x of clean){if(seen.has(x.toLowerCase())){toast('Duplicate: '+x);return}seen.add(x.toLowerCase())}
