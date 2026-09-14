@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='12.1 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='12.2 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -247,10 +247,18 @@ while(term&&k<term){const iso=addMonths(start,k);if(iso>endCalc)break;principal+
 let mv=0;for(let j=0;j<term;j++){const iso=addMonths(start,j);mv+=grow(m,iso,maturity||endCalc)}matValue=mv;
 accrued=value-principal}
 else{principal=+(a.principal||0);
+// money actually moved into (or out of) the deposit, each parcel growing from its own date
+const parcels=D.txns.filter(t=>t.type==='transfer'&&(t.toAccountId===a.id||t.accountId===a.id)&&landed(t)&&(t.recvDate||t.date)<=endCalc)
+ .map(t=>({d:(t.recvDate||t.date),amt:(t.toAccountId===a.id?(t.toAmount??t.amount):-t.amount)}));
+const pSum=parcels.reduce((x,y)=>x+y.amt,0);
+if(pSum!==0)principal+=pSum;
 if(payout>0){value=principal;const per=principal*r/payout;const periods=Math.floor(yearsBetween(start,endCalc)*payout);paidOut=periods*per;
 const lastPay=addMonths(start,Math.round(periods*12/payout));accrued=principal*r*yearsBetween(lastPay,endCalc);
 matValue=principal}
-else{value=grow(principal,start,endCalc);matValue=maturity?grow(principal,start,maturity):value;accrued=value-principal}}
+else{const base=+(a.principal||0);
+value=grow(base,start,endCalc)+parcels.reduce((x,y)=>x+grow(y.amt,y.d<start?start:y.d,endCalc),0);
+matValue=maturity?(grow(base,start,maturity)+parcels.reduce((x,y)=>x+grow(y.amt,y.d<start?start:y.d,maturity),0)):value;
+accrued=value-principal}}
 const nextPay=payout>0?(()=>{const per=Math.round(12/payout);let d=addMonths(start,per);let g=0;while(d<=asOf&&g++<600)d=addMonths(d,per);return(!maturity||d<=maturity)?d:null})():null;
 return{principal,value,matValue,interest:matValue-principal,earned:value-principal+paidOut,paidOut,accrued,maturity,nextPay,perPayout:payout>0?principal*r/payout:0}}
 const AREA={sqft:'sq ft',sqyd:'sq yd',acre:'acre',cent:'cent',gunta:'gunta',sqm:'sq m'};
@@ -746,7 +754,7 @@ const PGROUPS=[['Checking & savings',a=>['checking','savings','cash'].includes(a
 function openTypeFilter(){const opts=[['all','All types','Everything you have recorded'],['expense','Expenses','Money spent'],['income','Income','Money earned'],['transfer','Transfers','Between accounts, or to and from people']];
 sheet={title:'Filter by type',body(){return`<div class="card menu">${opts.map(([v,t,d])=>`<div class="row" data-ftp="${v}"${F.type===v?' style="background:var(--mvS)"':''}><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div>${F.type===v?'<span style="color:var(--mv)">✓</span>':'<span class="muted">›</span>'}</div>`).join('')}</div>`},
 wire(){document.querySelectorAll('[data-ftp]').forEach(el=>el.onclick=()=>{F.type=el.dataset.ftp;sheet=null;render();rememberSearch(document.querySelectorAll('[data-txn]').length)})}};renderSheet()}
-function openAcctPicker(opt){let showAll=false,q='';const all=D.accounts.filter(a=>(!opt.filter||opt.filter(a))&&!(opt.hidePeople&&isPerson(a)));
+function openAcctPicker(opt){let showAll=false,q='';const all=D.accounts.filter(a=>(!opt.filter||opt.filter(a))&&!(opt.hidePeople&&isPerson(a))&&!(opt.hideInvest&&isInvest(a)&&usesUnits(a)));
 sheet={title:opt.title||'Choose an account',body(){const b=balances();
 const spend=a=>SPENDT.includes(a.type)||(opt.withPeople&&isPerson(a));
 const pool=all.filter(a=>showAll||spend(a)||a.id===opt.current);
@@ -801,12 +809,12 @@ sheet={title:edit?'Edit transaction':'New transaction',tall:true,body(){const cl
 return`<div class="seg" style="grid-template-columns:repeat(${D.accounts.some(isInvest)?4:3},1fr)">${[['expense','Expense','out'],['income','Income','in'],['transfer','Transfer','mv']].concat(D.accounts.some(isInvest)?[['invest','Invest','mv']]:[]).map(([v,l,c])=>`<button data-t="${v}" class="${st.type===v?'on '+c:''}">${l}</button>`).join('')}</div>
 <div class="amtrow" data-formcur="${fc}"><span class="${cls}">${CUR[fc].sym}</span><input id="am" class="num ${cls}" inputmode="decimal" value="${esc(st.amount)}" placeholder="0.00"></div>
 ${st.type==='invest'?(()=>{const iv=D.accounts.filter(a=>isInvest(a)&&cur(a)===fc);const inv=acct(st.toAccountId);const amt=nv(st.amount)||0;const u=nv(st.units)||0;
-return`${acctField(st.sell?'Sell from':'Paid from','fr',st.accountId,st.type)}<div class="g2"><label class="field"><div>${st.sell?'Money into':'Invest in'}</div><select id="to"><option value="">Choose…</option>${iv.map(a=>`<option value="${a.id}"${st.toAccountId===a.id?' selected':''}>${esc(a.name)} · ${KINDS[a.kind]}</option>`).join('')}</select></label></div>
+return`${acctField(st.sell?'Money received into':'Paid from','fr',st.accountId,st.type)}<div class="g2"><label class="field"><div>${st.sell?'Sold from':'Invest in'}</div><select id="to"><option value="">Choose…</option>${iv.map(a=>`<option value="${a.id}"${st.toAccountId===a.id?' selected':''}>${esc(a.name)} · ${KINDS[a.kind]}</option>`).join('')}</select></label></div>
 ${!iv.length?`<div class="note out" >No ${fc} investment accounts yet — add one from Menu › Investments.</div>`:''}
 ${inv&&usesUnits(inv)?`<div class="g2">${inv.kind==='gold'?`<label class="field"><div>Purity</div><select id="pu">${Object.entries(PURITY).map(([k,v])=>`<option value="${k}"${(st.purity||'22')===k?' selected':''}>${v.label}</option>`).join('')}</select></label>`:''}<label class="field"><div>${unitLabel(inv)[0].toUpperCase()+unitLabel(inv).slice(1)}</div><input id="un" class="num" inputmode="decimal" value="${esc(st.units)}" placeholder="0.000"></label></div>
 ${amt>0&&u>0?`<div class="note mv" >${money(amt/u,0,fc)} per ${unitLabel(inv).replace(/s$/,'')}${inv.kind==='gold'&&st.purity?` (${PURITY[st.purity||'22'].label})`:''}.</div>`:''}`:''}
-<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sell" style="width:auto"${st.sell?' checked':''}><span style="font-size:14px">This is a sale (money comes back to me)</span></label>`})():''}
-${st.type==='transfer'?`${acctField('From','fr',st.accountId,'transfer')}${acctField('To','to',st.toAccountId,'transfer-to',a=>a.id!==st.accountId)}
+<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sell" style="width:auto"${st.sell?' checked':''}><span style="font-size:14px">I sold some — money comes back to me</span></label>`})():''}
+${st.type==='transfer'?`${acctField('From','fr',st.accountId,'transfer',a=>!isPerson(a)&&!isInvest(a))}${acctField('To','to',st.toAccountId,'transfer-to',a=>a.id!==st.accountId&&!isPerson(a)&&!isInvest(a))}
 ${(()=>{const f=acct(st.accountId),t2=acct(st.toAccountId);const pp=isPerson(f)?f:(isPerson(t2)?t2:null);if(!pp)return'';
 const bal=owedTo(pp.id);const liveEl=(typeof document!=='undefined')?document.getElementById('am'):null;const amt=parseFloat(String((liveEl&&liveEl.value)||st.amount||'').replace(/[^0-9.]/g,''))||0;const c2=cur(pp);
 const toPerson=isPerson(t2);
@@ -892,7 +900,7 @@ document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{const parts=b.d
 if(parts[0]==='fr')st.accountId=parts[1];else st.toAccountId=parts[1];
 noteRecent(parts[0]==='to'?'transfer-to':st.type,parts[1]);renderSheet()});
 document.querySelectorAll('[data-acmore]').forEach(b=>b.onclick=()=>{const fld=b.dataset.acmore;const back=sheet;
-openAcctPicker({noRecent:true,hidePeople:st.type!=='transfer',title:fld==='to'?'To':(st.type==='expense'?'Paid from':st.type==='transfer'?'From':'Deposited to'),
+openAcctPicker({noRecent:true,hidePeople:st.type!=='transfer',hideInvest:st.type==='transfer',title:fld==='to'?'To':(st.type==='expense'?'Paid from':st.type==='transfer'?'From':'Deposited to'),
 current:fld==='fr'?st.accountId:st.toAccountId,type:fld==='to'?'transfer-to':st.type,
 filter:fld==='to'?(a=>a.id!==st.accountId):null,
 onCancel:()=>{sheet=back;renderSheet()},
@@ -1475,12 +1483,33 @@ $('editAcct').onclick=()=>openAccount(a);document.getElementById('cancel').oncli
 
 // ---------- people & groups ----------
 D.groups=D.groups||[];
+function openPersonEdit(a,c,onDone){if(!a)return;let nm=pname(a);
+const txns=D.txns.filter(t=>t.accountId===a.id||t.toAccountId===a.id);
+sheet={title:esc(pname(a)),cur:()=>cur(a),body(){const b=owedTo(a.id);
+return`<label class="field"><div>Name</div><input id="pnm" value="${esc(nm)}"></label>
+<div class="note ${Math.abs(b)<0.005?'':(b>0?'in':'out')}">${Math.abs(b)<0.005?'Settled up.':(b>0?`${esc(pname(a))} owes you ${money(b,0,cur(a))}.`:`You owe ${esc(pname(a))} ${money(-b,0,cur(a))}.`)} ${txns.length} transaction${txns.length===1?'':'s'} on record.</div>
+<button class="btn p" id="pok" style="margin-top:12px">Save</button>
+<button class="btn" id="popen" style="margin-top:8px">Open their page</button>
+<button class="btn d" id="prm" style="margin-top:8px">Remove person</button>`},
+wire(){const $=id=>document.getElementById(id);
+$('pnm').oninput=e=>{nm=e.target.value};
+$('pok').onclick=()=>{const v=nm.trim();if(!v)return toast('Name it');a.name=v;save();backSheet();if(onDone)onDone();render();toast('Saved')};
+$('popen').onclick=()=>{pushSheet();openPerson(a)};
+$('prm').onclick=()=>{const b=owedTo(a.id);
+const msg=(Math.abs(b)>0.005||txns.length)?`${esc(pname(a))}${Math.abs(b)>0.005?` still ${b>0?'owes you ':'is owed '}${money(Math.abs(b),0,cur(a))}`:''}${txns.length?` across ${txns.length} transaction${txns.length===1?'':'s'}`:''}. Removing them keeps those entries but you lose the running balance. Remove anyway?`:`Remove ${pname(a)}?`;
+if(!confirm(msg))return;
+D.accounts=D.accounts.filter(x=>x.id!==a.id);
+(D.groups||[]).forEach(g=>{g.members=(g.members||[]).filter(m=>m!==a.id)});
+save();backSheet();if(onDone)onDone();render();toast('Removed')}}};renderSheet()}
 function openGroups(c,onDone){c=c||ensureCur();
-sheet={title:'Groups',body(){const gs=(D.groups||[]).filter(g=>g.currency===c);
+sheet={title:'People & groups',body(){const gs=(D.groups||[]).filter(g=>g.currency===c);const ppl=peopleIn(c);
 return`<div class="muted" style="margin-bottom:12px;line-height:1.4">Save the people you split with regularly — then one tap selects all of them on a bill.</div>
-${gs.length?`<div class="card">${gs.map(g=>`<div class="row" data-gedit="${g.id}"><div class="main"><div class="t">${esc(g.name)}</div><div class="s">${g.members.map(m=>esc(pname(acct(m)))).filter(Boolean).join(', ')||'no one yet'}</div></div><span class="muted">›</span></div>`).join('')}</div>`:'<div class="empty" style="padding:20px 0">No groups yet.</div>'}
+${ppl.length?`<div class="sec" style="padding-top:0">People</div><div class="card">${ppl.map(pp=>{const b=owedTo(pp.id);
+return`<div class="row" data-pedit="${pp.id}"><div class="main"><div class="t">${esc(pname(pp))} <span class="muted" style="font-size:11px">${c}</span></div><div class="s">${Math.abs(b)<0.005?'settled up':(b>0?'owes you '+money(b,0,c):'you owe '+money(-b,0,c))}</div></div><span class="muted">›</span></div>`}).join('')}</div>`:''}
+${gs.length?`<div class="sec">Groups</div><div class="card">${gs.map(g=>`<div class="row" data-gedit=""${g.id}"><div class="main"><div class="t">${esc(g.name)}</div><div class="s">${g.members.map(m=>esc(pname(acct(m)))).filter(Boolean).join(', ')||'no one yet'}</div></div><span class="muted">›</span></div>`).join('')}</div>`:(ppl.length?'':'<div class="empty" style="padding:20px 0">No people or groups yet.</div>')}
 <div class="tools" style="margin-top:12px"><button class="btn p" id="addGrp" style="width:auto">Create group</button><button class="btn" id="addPer" style="width:auto">Add a person</button></div>`},
 wire(){document.querySelectorAll('[data-gedit]').forEach(el=>el.onclick=()=>openGroupEdit(D.groups.find(g=>g.id===el.dataset.gedit),c,onDone));
+document.querySelectorAll('[data-pedit]').forEach(el=>el.onclick=()=>{pushSheet();openPersonEdit(acct(el.dataset.pedit),c,onDone)});
 document.getElementById('addGrp').onclick=()=>openGroupEdit(null,c,onDone);
 const ap=document.getElementById('addPer');ap&&(ap.onclick=()=>{openAccount({type:'held',currency:c},true);
 const pw=sheet.wire;sheet.wire=function(){pw.call(sheet);const okb=document.getElementById('ok');if(okb){const pv=okb.onclick;okb.onclick=()=>{pv&&pv();openGroups(c,onDone)}}};renderSheet()});
