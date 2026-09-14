@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='11.7 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='11.8 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -217,6 +217,7 @@ const numVal=el=>parseFloat(String(el&&el.value||'').replace(/[^0-9.]/g,''))||0;
 const money=(n,sign,c='USD')=>{const s=fmt(Math.abs(n),c);return sign?(n<0?'−':'+')+s:(n<0?'−':'')+s};
 const cur=a=>a?.currency||'USD';
 const mk=d=>d.slice(0,7);
+const monthsSince=d=>{if(!d)return 0;const a=new Date(d+'T00:00:00'),n=new Date();return Math.max(0,(n.getFullYear()-a.getFullYear())*12+(n.getMonth()-a.getMonth()))};
 const mlabel=k=>{const[y,m]=k.split('-');return new Date(+y,+m-1,1).toLocaleString('en-US',{month:'long',year:'numeric'})};
 const dlabel=(d,force)=>{const dt=new Date(d+'T00:00:00'),t=new Date();t.setHours(0,0,0,0);const df=Math.round((t-dt)/864e5);
 if(!force){if(df===0)return'Today';if(df===1)return'Yesterday'}
@@ -311,7 +312,7 @@ const h=holdings(a);if(a.kind==='gold'){let v=0,any=false;Object.entries(h.byPur
 const r=rateOf(a);return r!=null?h.units*r:null}
 // ---- loan maths: daily interest = out * rate / 36500, posted on statement day ----
 function loanState(a){const basis=a.basis||365;const stDay=a.stDay||1;const start=a.since||today();
-const pays=D.txns.filter(t=>t.type==='transfer'&&t.toAccountId===a.id&&landed(t)).map(t=>({d:t.recvDate||t.date,amt:(t.toAmount??t.amount)})).sort((x,y)=>x.d.localeCompare(y.d));
+const pays=D.txns.filter(t=>t.type==='transfer'&&t.toAccountId===a.id&&landed(t)).map(t=>({d:t.recvDate||t.date,amt:(t.toAmount??t.amount)})).filter(x=>x.d>=start).sort((x,y)=>x.d.localeCompare(y.d));
 let out=a.principal||0,pi=0,ti=0,accr=0,pIdx=0;const byPay=[];
 const d0=new Date(start+'T00:00:00'),dEnd=new Date(today()+'T00:00:00');
 for(let d=new Date(d0);d<=dEnd;d.setDate(d.getDate()+1)){const iso=d.toISOString().slice(0,10);
@@ -645,7 +646,7 @@ ${st.type==='credit'?`<div class="g2"><label class="field" style="margin:0"><div
 ${st.promoUntil&&st.promoUntil>=today()?`<div class="note in" >0% until ${dlabel(st.promoUntil,1)} — no interest until then. After that, ${st.apr?esc(st.apr)+'%':'your regular APR'} applies to whatever is left.</div>`:parseFloat(st.apr)>0?`<div class="note mv" >Interest only applies if you don't pay the statement balance by the due date. Pay in full and it stays at zero.</div>`:''}`:''}
 ${st.type==='loan'?`<div class="g2"><label class="field"><div>Outstanding now (${CUR[st.currency].sym})</div><input id="apr" class="num" inputmode="decimal" value="${esc(st.principal)}" placeholder="1000000"></label><label class="field"><div>Interest rate (% per year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="10"></label></div>
 <div class="g2"><label class="field"><div>Balance updates on day</div><select id="asd">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${st.stDay===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label><label class="field"><div>Day-count basis</div><select id="ab2"><option value="365"${st.basis===365?' selected':''}>365</option><option value="360"${st.basis===360?' selected':''}>360</option></select></label></div>
-<div class="g2"><label class="field"><div>Months left <span class="muted">(tenure)</span></div><input id="amo" class="num" inputmode="numeric" value="${esc(st.months)}" placeholder="12"></label><label class="field"><div>EMI amount</div><input id="aemi" class="num" inputmode="decimal" value="${esc(st.emi)}" placeholder="0.00"></label></div>
+<div class="g2"><label class="field"><div>Months left <span class="muted">as of ${st.since?dlabel(st.since,1):'the balance date'}</span></div><input id="amo" class="num" inputmode="numeric" value="${esc(st.months)}" placeholder="12">${(()=>{const n=parseInt(st.months)||0;if(!(n>0)||!st.since)return'';const d=new Date(st.since+'T00:00:00');d.setMonth(d.getMonth()+n);return `<div class="muted" style="font-size:11px;margin-top:4px">Tenure ends ${mlabel(mk(d.toISOString().slice(0,10)))}</div>`})()}</label><label class="field"><div>EMI amount</div><input id="aemi" class="num" inputmode="decimal" value="${esc(st.emi)}" placeholder="0.00"></label></div>
 ${(()=>{const P=parseFloat(st.principal)||0,R=parseFloat(st.rate)||0,n=parseInt(st.months)||0,e=parseFloat(st.emi)||0;
 if(P>0&&R>0&&n>0){const calc=emiFor(P,R,n);const diff=e>0?e-calc:0;
 return`<div class="note mv" >EMI works out to <b class="num">${money(calc,0,st.currency)}</b> for ${n} months at ${R}%.${e>0&&Math.abs(diff)>1?` Your bank says ${money(e,0,st.currency)} — ${money(Math.abs(diff),0,st.currency)} ${diff>0?'more':'less'}; yours is used.`:e>0?' Matches what you entered.':''}${e>0?'':' <span class="muted">Saved as your EMI unless you type a different one.</span>'}</div>`}
@@ -1423,14 +1424,20 @@ return`<div class="kpi" style="grid-template-columns:1fr 1fr;margin:0 0 12px"><d
 ${(()=>{const s0=a.emi>0?simLoan(a):null;return`<div class="stat"><span>Payoff at ${a.emi>0?f(a.emi)+'/mo':'current EMI'}</span><b class="num">${s0?s0.months+' mo':'—'}</b><i>${s0?'done by '+mlabel(mk(s0.payoff)):(a.emi>0?'EMI too small to cover interest':'set an EMI')}</i></div>`})()}</div>
 ${(()=>{const P=L.principalOut,Rt=a.rate||0,e=a.emi||0;const n=a.months||0;
 if(!(P>0&&Rt>0&&e>0))return'';
-const s1=simLoan(a);const left=s1?s1.months:0;
-const calc=n>0?emiFor(P,Rt,n):(left>0?emiFor(P,Rt,left):0);
-if(!(calc>0))return'';
-const diff=e-calc;const pctOff=Math.abs(diff)/calc*100;
-if(pctOff<=2)return`<div class="muted num" style="font-size:11px;margin:-4px 0 12px">Your EMI ${f(e)} matches the calculated ${f(calc)} for ${n||left} months at ${Rt}% — within rounding.</div>`;
-const fast=n>0&&left>0&&n>left?n-left:0;
-return`<div class="card" style="padding:11px 14px;margin-bottom:12px"><div style="font-size:12px">Your EMI is <b class="num">${f(Math.abs(diff))} ${diff>0?'more':'less'}</b> than the ${f(calc)} calculated for ${n||left} months at ${Rt}%.</div>
-<div class="muted" style="font-size:11px;margin-top:4px">${diff>0?`Either the rate has changed, the tenure is different, or you are paying extra${fast?` — which clears the loan about ${fast} month${fast===1?'':'s'} early`:''}.`:'Check the rate or tenure — at this payment the loan runs longer than the tenure you entered.'}</div></div>`})()}
+const s1=simLoan(a);const left=s1?s1.months:0;if(!left)return'';
+// where the tenure ends, measured from the balance date
+let endK='';if(n>0&&a.since){const d=new Date(a.since+'T00:00:00');d.setMonth(d.getMonth()+n);endK=mk(d.toISOString().slice(0,10))}
+const monthsFromNow=endK?(()=>{const[y,m]=endK.split('-');const now=new Date();return (+y-now.getFullYear())*12+(+m-1-now.getMonth())})():0;
+if(!n||!endK)return'';
+const over=left-monthsFromNow;
+// how many EMI payments are recorded since the balance date
+const paid=D.txns.filter(t=>t.type==='transfer'&&t.toAccountId===a.id&&t.date>=a.since).length;
+const expect=Math.max(0,monthsSince(a.since));
+if(over<=0){return`<div class="muted" style="font-size:11px;margin:-4px 0 12px">Clears in ${left} months — ${over<0?`${-over} ahead of your tenure, which ends ${mlabel(endK)}`:`on track for ${mlabel(endK)}`}.</div>`}
+return`<div class="card" style="padding:11px 14px;margin-bottom:12px"><div style="font-size:12px">Your tenure ends <b>${mlabel(endK)}</b>. At ${f(e)} this projects <b>${left} months</b>, ${over} past that.</div>
+${(expect>paid)?`<div class="muted" style="font-size:11px;margin-top:6px">Most likely ${expect-paid===1?'one payment is':expect-paid+' payments are'} not recorded since ${dlabel(a.since,1)}, so interest has been added here that you have actually paid.</div>
+<div class="muted" style="font-size:11px;margin-top:6px">To make them agree: record your EMI payments as transfers to this loan, or update the balance and as-of date to today's figures.</div>`
+:`<div class="muted" style="font-size:11px;margin-top:6px">${over<=1?'A gap of a month is the interest convention — daily on a '+(a.basis||365)+'-day basis here, possibly monthly reducing balance at your bank. Nothing to act on.':'Check the rate, the tenure, or the balance date against your latest statement.'}</div>`}</div>`})()}
 ${a.emi>0&&L.out>0?(()=>{const base=simLoan(a);const xm=parseFloat(String(extraM).replace(/[^0-9.]/g,''))||0,lump=parseFloat(String(lumpAmt).replace(/[^0-9.]/g,''))||0;
 const wm=xm>0?simLoan(a,{extraMonthly:xm}):null;const wl=lump>0?simLoan(a,{lumps:[{date:lumpDate,amt:lump}]}):null;
 const both=(xm>0&&lump>0)?simLoan(a,{extraMonthly:xm,lumps:[{date:lumpDate,amt:lump}]}):null;
