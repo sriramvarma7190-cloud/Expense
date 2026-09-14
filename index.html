@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='11.5 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='11.6 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -267,6 +267,8 @@ function addPerson(name,c){const a={id:uid(),name:name.trim(),bank:name.trim(),t
 const owedTo=id=>{const b=balances();return b[id]||0};
 const isSavingsAcct=a=>a&&(a.type==='savings'||a.type==='held');
 const landed=t=>!t.pending&&(t.recvDate||t.date)<=today();
+const scheduled=t=>t.date>today();
+const posted=t=>!scheduled(t);
 const acct=id=>D.accounts.find(a=>a.id===id);
 const IN_BANKS=[['airp',"Airtel Payments Bank"],['aubl',"AU Small Finance Bank"],['barb',"Bank of Baroda"],['bdbl',"Bandhan Bank"],['bkid',"Bank of India"],['cbin',"Central Bank of India"],['ciub',"City Union Bank"],['cnrb',"Canara Bank"],['csbk',"CSB Bank"],['dcbl',"DCB Bank"],['dlxb',"Dhanalakshmi Bank"],['esmf',"ESAF Small Finance Bank"],['fdrl',"Federal Bank"],['fino',"FINO Payments Bank"],['hdfc',"HDFC Bank"],['ibkl',"IDBI Bank"],['icic',"ICICI Bank"],['idfb',"IDFC First Bank"],['idib',"Indian Bank"],['indb',"IndusInd Bank"],['ioba',"Indian Overseas Bank"],['jaka',"Jammu and Kashmir Bank"],['jiop',"Jio Payments Bank"],['karb',"Karnataka Bank"],['kkbk',"Kotak Mahindra Bank"],['kvbl',"Karur Vysya Bank"],['mahb',"Bank of Maharashtra"],['ntbl',"Nainital Bank"],['psib',"Punjab and Sind Bank"],['punb',"Punjab National Bank"],['pytm',"Paytm Payments Bank"],['ratn',"RBL Bank"],['sbin',"State Bank of India"],['scbl',"Standard Chartered Bank"],['sibl',"South Indian Bank"],['tmbl',"Tamilnad Mercantile Bank"],['ubin',"Union Bank of India"],['ucba',"UCO Bank"],['ujvn',"Ujjivan Small Finance Bank"],['utib',"Axis Bank"],['yesb',"Yes Bank"]];
 const IN_ALIAS={sbin:'sbi state bank of india',punb:'pnb punjab national',barb:'bob bank of baroda',kkbk:'kotak mahindra',utib:'axis',icic:'icici',hdfc:'hdfc',idib:'indian bank',ibkl:'idbi',indb:'indusind',cnrb:'canara',ubin:'union bank',fdrl:'federal',bkid:'boi bank of india',mahb:'maharashtra',ioba:'iob overseas',ratn:'rbl ratnakar',yesb:'yes',scbl:'standard chartered sc',pytm:'paytm',airp:'airtel',jiop:'jio',aubl:'au small finance',esmf:'esaf',ujvn:'ujjivan',karb:'karnataka',kvbl:'karur vysya',ciub:'city union',csbk:'csb catholic syrian',dcbl:'dcb',dlxb:'dhanlaxmi dhanalakshmi',psib:'punjab and sind',sibl:'south indian',tmbl:'tamilnad mercantile tmb',ucba:'uco',cbin:'central bank',bdbl:'bandhan',jaka:'j&k jammu kashmir',ntbl:'nainital',fino:'fino',idfb:'idfc first'};
@@ -294,7 +296,7 @@ if(custom){if(isImgUrl(custom))srcs=[custom];else{const d=custom.replace(/^https
 else if(b){const mark=b.slug?[`https://cdn.simpleicons.org/${b.slug}/white`]:[];const web=b.domain?logoSources(b.domain):[];srcs=(b.img?[b.img]:[]).concat((D.settings.logoStyle||'mark')==='mark'?mark.concat(web):web.concat(mark))}
 const mono=(a.bank||a.name).slice(0,2).toUpperCase();
 return`<div class="mono logo" style="width:${size}px;height:${size}px;border-radius:${Math.round(size*.28)}px;background:${b?b.color:'var(--bg)'};color:${b?'#fff':'var(--ink2)'};font-size:${Math.round(size/3)}px"><span>${esc(mono)}</span>${srcs.length?`<img src="${esc(srcs[0])}" data-alt="${esc(srcs.slice(1).join('|'))}" alt="" loading="lazy" onerror="logoNext(this)" onload="logoCheck(this)" class="${/simpleicons/.test(srcs[0])?'plain':''}">`:''}</div>`}
-function balances(){const b={};D.accounts.forEach(a=>b[a.id]=a.opening||0);D.txns.forEach(t=>{if(t.type==='expense')b[t.accountId]-=t.amount;else if(t.type==='income')b[t.accountId]+=t.amount;else{b[t.accountId]-=t.amount;if(landed(t))b[t.toAccountId]+=(t.toAmount??t.amount)}});
+function balances(){const b={};D.accounts.forEach(a=>b[a.id]=a.opening||0);D.txns.forEach(t=>{if(scheduled(t)&&t.type!=='transfer')return;if(t.type==='expense')b[t.accountId]-=t.amount;else if(t.type==='income')b[t.accountId]+=t.amount;else{if(!scheduled(t))b[t.accountId]-=t.amount;if(landed(t))b[t.toAccountId]+=(t.toAmount??t.amount)}});
 D.accounts.filter(isLoan).forEach(a=>{b[a.id]=-loanState(a).out});return b}
 // units held per investment account (and per purity for gold)
 function holdings(a){const h={};let cost=0,proceeds=0;const ini=a.init||{};Object.entries(ini.byPurity||{}).forEach(([k,v])=>{if(v)h[k]=(h[k]||0)+(+v)});if(ini.units)h['-']=(h['-']||0)+(+ini.units);cost+=(+ini.cost||0);
@@ -412,6 +414,9 @@ return`<div class="sec">Goals<span class="r"><button class="link" id="addGoalH" 
 <div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--accent)'}"></i></div>
 <div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,c)} of ${money(wt,0,c)}${wp.debtFree!=null&&wp.debtFree>0?' · debt-free '+mLabel(wp.debtFree):''}</div></div>`:''}
 ${gl.map(g=>goalCard(g)).join('')}</div>`})()}
+${(()=>{const up=D.txns.filter(t=>scheduled(t)&&t.type!=='transfer'&&inCur(t,c)).sort((a,b)=>a.date.localeCompare(b.date));
+if(!up.length)return'';
+return`<div class="sec">Upcoming<span class="r">not counted yet</span></div><div class="card">${up.map(t=>txnRow(t,1)).join('')}</div>`})()}
 ${transit.length?`<div class="sec">In transit<span class="r">not yet credited</span></div><div class="card">${transit.map(t=>`${txnRow(t,1)}<div class="tools" style="padding:10px 14px 14px;margin:0;border-top:1px solid var(--line);border-top-width:1px"><button class="btn p" data-recv="${t.id}" style="width:auto;padding:7px 12px;font-size:12px">Received today</button><button class="btn" data-recvd="${t.id}" style="width:auto;padding:7px 12px;font-size:12px">Pick a date</button></div>`).join('')}</div>`:''}
 <div class="sec">Accounts<span class="r"><button class="link" id="addAcct" style="font-size:12px">Add account</button></span></div>
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
@@ -958,22 +963,22 @@ return`<div class="seg" style="margin:14px 0 0;grid-template-columns:repeat(${op
 const shiftMonth=(m,n)=>{const[y,mo]=m.split('-').map(Number);const d=new Date(y,mo-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
 const monthsOf=y=>Array.from({length:12},(_,i)=>`${y}-${String(i+1).padStart(2,'0')}`);
 const inCur=(t,c)=>cur(acct(t.accountId))===c;
-const sumT=(pred)=>D.txns.filter(pred).reduce((s,t)=>s+t.amount,0);
+const sumT=(pred)=>D.txns.filter(t=>posted(t)&&pred(t)).reduce((s,t)=>s+t.amount,0);
 const spentIn=(m,c)=>sumT(t=>t.type==='expense'&&inCur(t,c)&&(m.length===4?t.date.startsWith(m):mk(t.date)===m));
 const earnedIn=(m,c)=>sumT(t=>t.type==='income'&&inCur(t,c)&&(m.length===4?t.date.startsWith(m):mk(t.date)===m));
 const sentIn=(m,c)=>sumT(t=>t.type==='transfer'&&inCur(t,c)&&t.toAccountId&&cur(acct(t.toAccountId))!==c&&(m.length===4?t.date.startsWith(m):mk(t.date)===m));
-function catSpend(m,c){const o={};D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&mk(t.date)===m).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+t.amount});return o}
+function catSpend(m,c){const o={};D.txns.filter(t=>posted(t)&&t.type==='expense'&&inCur(t,c)&&mk(t.date)===m).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+t.amount});return o}
 function budgetFor(m,c){const b=(D.budgets||{})[c]||{};return b[m]||b.default||{}}
 const pct=(a,b)=>b>0?Math.min(100,Math.round(a/b*100)):0;
-const allSpent=m=>D.txns.filter(t=>t.type==='expense'&&inRange(t.date,m)).reduce((s2,t)=>s2+toBase(t.amount,cur(acct(t.accountId))),0);
-const allEarned=m=>D.txns.filter(t=>t.type==='income'&&inRange(t.date,m)).reduce((s2,t)=>s2+toBase(t.amount,cur(acct(t.accountId))),0);
+const allSpent=m=>D.txns.filter(t=>posted(t)&&t.type==='expense'&&inRange(t.date,m)).reduce((s2,t)=>s2+toBase(t.amount,cur(acct(t.accountId))),0);
+const allEarned=m=>D.txns.filter(t=>posted(t)&&t.type==='income'&&inRange(t.date,m)).reduce((s2,t)=>s2+toBase(t.amount,cur(acct(t.accountId))),0);
 const inRange=(d,m)=>m.length===4?d.startsWith(m):mk(d)===m;
 const receivedIn=(m,c)=>D.txns.filter(t=>t.type==='transfer'&&landed(t)&&cur(acct(t.toAccountId))===c&&cur(acct(t.accountId))!==c&&inRange(t.recvDate||t.date,m)).reduce((s,t)=>s+(t.toAmount??t.amount),0);
 const savedIn=(m,c)=>D.txns.filter(t=>t.type==='transfer'&&inCur(t,c)&&cur(acct(t.toAccountId))===c&&(isSavingsAcct(acct(t.toAccountId))||isInvest(acct(t.toAccountId)))&&!isSavingsAcct(acct(t.accountId))&&!isInvest(acct(t.accountId))&&inRange(t.date,m)).reduce((s,t)=>s+t.amount,0);
 const inflowIn=(m,c)=>earnedIn(m,c)+receivedIn(m,c);
 const remainingIn=(m,c)=>inflowIn(m,c)-spentIn(m,c)-sentIn(m,c);
-const catSpendRange=(rng,c,all)=>{const o={};D.txns.filter(t=>t.type==='expense'&&(all||inCur(t,c))&&(rng==='all'||inRange(t.date,rng))).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+(all?toBase(t.amount,cur(acct(t.accountId))):t.amount)});return o};
-const monthsWithData=(rng,c)=>new Set(D.txns.filter(t=>t.type==='expense'&&inCur(t,c)&&(rng==='all'||inRange(t.date,rng))).map(t=>mk(t.date))).size;
+const catSpendRange=(rng,c,all)=>{const o={};D.txns.filter(t=>posted(t)&&t.type==='expense'&&(all||inCur(t,c))&&(rng==='all'||inRange(t.date,rng))).forEach(t=>{const k=t.category||'Other';o[k]=(o[k]||0)+(all?toBase(t.amount,cur(acct(t.accountId))):t.amount)});return o};
+const monthsWithData=(rng,c)=>new Set(D.txns.filter(t=>posted(t)&&t.type==='expense'&&inCur(t,c)&&(rng==='all'||inRange(t.date,rng))).map(t=>mk(t.date))).size;
 
 function p_nw(){const b=balances();let v=0;const c=R.cur;D.accounts.forEach(a=>{if(cur(a)!==c)return;
 if(isLoan(a)||isCard(a))v-= (isCard(a)&&a.closeDay?cardState(a).total:-b[a.id]);
