@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='11.9 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='12.0 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1428,17 +1428,22 @@ if(!(P>0&&Rt>0&&e>0))return'';
 const s1=simLoan(a);const left=s1?s1.months:0;if(!left)return'';
 // where the tenure ends, measured from the balance date
 let endK='';if(n>0&&a.since){const d=new Date(a.since+'T00:00:00');d.setMonth(d.getMonth()+n);endK=mk(d.toISOString().slice(0,10))}
-const monthsFromNow=endK?(()=>{const[y,m]=endK.split('-');const now=new Date();return (+y-now.getFullYear())*12+(+m-1-now.getMonth())})():0;
 if(!n||!endK)return'';
+const now=new Date();const[ey,em]=endK.split('-');
+const monthsFromNow=(+ey-now.getFullYear())*12+(+em-1-now.getMonth());
 const over=left-monthsFromNow;
-// how many EMI payments are recorded since the balance date
+// month the projection actually lands in
+const dEnd=new Date();dEnd.setMonth(dEnd.getMonth()+left);const landK=mk(dEnd.toISOString().slice(0,10));
+if(over<=0)return`<div class="muted" style="font-size:11px;margin:-4px 0 12px">Clears in ${left} months — ${over<0?`${-over} ahead of your tenure, which ends ${mlabel(endK)}`:`on track for ${mlabel(endK)}`}.</div>`;
+// EMI and lump sum that would meet the deadline
+const need=monthsFromNow>0?emiFor(P,Rt,monthsFromNow):0;
+const canPay=monthsFromNow>0?Math.max(0,P-(e>0?(()=>{const r=Rt/1200;const f2=Math.pow(1+r,monthsFromNow);return r?e*(f2-1)/(r*f2):e*monthsFromNow})():0)):0;
 const paid=D.txns.filter(t=>t.type==='transfer'&&t.toAccountId===a.id&&t.date>=a.since).length;
-const expect=Math.max(0,monthsSince(a.since));
-if(over<=0){return`<div class="muted" style="font-size:11px;margin:-4px 0 12px">Clears in ${left} months — ${over<0?`${-over} ahead of your tenure, which ends ${mlabel(endK)}`:`on track for ${mlabel(endK)}`}.</div>`}
-return`<div class="card" style="padding:11px 14px;margin-bottom:12px"><div style="font-size:12px">Your tenure ends <b>${mlabel(endK)}</b>. At ${f(e)} this projects <b>${left} months</b>, ${over} past that.</div>
-${(expect>paid)?`<div class="muted" style="font-size:11px;margin-top:6px">Most likely ${expect-paid===1?'one payment is':expect-paid+' payments are'} not recorded since ${dlabel(a.since,1)}, so interest has been added here that you have actually paid.</div>
-<div class="muted" style="font-size:11px;margin-top:6px">To make them agree: record your EMI payments as transfers to this loan, or update the balance and as-of date to today's figures.</div>`
-:`<div class="muted" style="font-size:11px;margin-top:6px">${over<=1?'A gap of a month is the interest convention — daily on a '+(a.basis||365)+'-day basis here, possibly monthly reducing balance at your bank. Nothing to act on.':'Check the rate, the tenure, or the balance date against your latest statement.'}</div>`}</div>`})()}
+const missing=Math.max(0,monthsSince(a.since)-paid);
+return`<div class="card" style="padding:11px 14px;margin-bottom:12px">
+<div style="font-size:12px">Finishes <b>${mlabel(landK)}</b> — your tenure ends <b>${mlabel(endK)}</b>.</div>
+<div class="muted" style="font-size:11px;margin-top:5px">${need>0?`${f(need)}/mo would close it on time${canPay>0?`, or ${f(canPay)} paid now`:''}.`:''}</div>
+${missing>0?`<div class="muted" style="font-size:11px;margin-top:5px">${missing===1?'One payment is':missing+' payments are'} not recorded since ${dlabel(a.since,1)} — record ${missing===1?'it':'them'} and this corrects itself.</div>`:''}</div>`})()}
 ${a.emi>0&&L.out>0?(()=>{const base=simLoan(a);const xm=parseFloat(String(extraM).replace(/[^0-9.]/g,''))||0,lump=parseFloat(String(lumpAmt).replace(/[^0-9.]/g,''))||0;
 const wm=xm>0?simLoan(a,{extraMonthly:xm}):null;const wl=lump>0?simLoan(a,{lumps:[{date:lumpDate,amt:lump}]}):null;
 const both=(xm>0&&lump>0)?simLoan(a,{extraMonthly:xm,lumps:[{date:lumpDate,amt:lump}]}):null;
