@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='11.8 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='11.9 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -213,6 +213,7 @@ if(digitsBefore===0)pos=0;
 try{el.setSelectionRange(pos,pos)}catch(e){}
 if(onVal)onVal(raw)});
 el.addEventListener('blur',()=>{el.value=groupNum(el.value,c)})}
+const nv=v=>parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''))||0;
 const numVal=el=>parseFloat(String(el&&el.value||'').replace(/[^0-9.]/g,''))||0;
 const money=(n,sign,c='USD')=>{const s=fmt(Math.abs(n),c);return sign?(n<0?'−':'+')+s:(n<0?'−':'')+s};
 const cur=a=>a?.currency||'USD';
@@ -605,14 +606,14 @@ ${st.type!=='held'&&st.type!=='invest'?(st.showLogo?`<label class="field" style=
 <label class="field"><div>Currency</div><select id="ac">${Object.entries(CUR).map(([k,v])=>`<option value="${k}"${st.currency===k?' selected':''}>${k} ${v.sym} — ${v.name}</option>`).join('')}</select></label></div>
 ${st.type==='held'?'<div class="note mv" >Money you gave someone to keep for you. It counts as your savings, and Reports shows how much sits with each person.</div>':''}
 ${st.type==='invest'?`<label class="field"><div>What kind</div><select id="ak">${Object.entries(KINDS).map(([k,l])=>`<option value="${k}"${st.kind===k?' selected':''}>${l}</option>`).join('')}</select></label>
-${isDep({kind:st.kind})?(()=>{const rd=st.kind==='rd';const sd=depState({kind:st.kind,rate:parseFloat(st.rate)||0,principal:parseFloat(st.principal)||0,monthly:parseFloat(st.monthly)||0,since:st.since,termMonths:parseInt(st.termMonths)||0,comp:+st.comp,payout:+st.payout,day:st.day});
+${isDep({kind:st.kind})?(()=>{const rd=st.kind==='rd';const sd=depState({kind:st.kind,rate:nv(st.rate)||0,principal:nv(st.principal)||0,monthly:nv(st.monthly)||0,since:st.since,termMonths:parseInt(st.termMonths)||0,comp:+st.comp,payout:+st.payout,day:st.day});
 return`<div class="g2">${rd?`<label class="field" style="margin:0"><div>Deposit each month (${CUR[st.currency].sym})</div><input id="amon" class="num" inputmode="decimal" value="${esc(st.monthly)}" placeholder="5000"></label><label class="field" style="margin:0"><div>On day</div><select id="aday">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${(+st.day||1)===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label>`
 :`<label class="field" style="margin:0"><div>Amount deposited (${CUR[st.currency].sym})</div><input id="apr" class="num" inputmode="decimal" value="${esc(st.principal)}" placeholder="100000"></label><label class="field" style="margin:0"><div>Rate (% a year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="7"></label>`}</div>
 ${rd?`<label class="field"><div>Rate (% a year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="7"></label>`:''}
 <div class="g2"><label class="field" style="margin:0"><div>Started on</div><input id="asn" type="date" value="${st.since}"></label><label class="field" style="margin:0"><div>Tenure (months)</div><input id="aterm" class="num" inputmode="numeric" value="${esc(st.termMonths)}" placeholder="12"></label></div>
 <div class="g2"><label class="field" style="margin:0"><div>Interest paid</div><select id="apay">${Object.entries(FREQ).map(([k,l])=>`<option value="${k}"${(+st.payout)===+k?' selected':''}>${k==='0'?'At maturity':l}</option>`).join('')}</select></label><label class="field" style="margin:0"><div>Compounded</div><select id="acomp"${(+st.payout)>0?' disabled':''}>${[[4,'Quarterly'],[12,'Monthly'],[2,'Half-yearly'],[1,'Yearly'],[0,'Simple interest']].map(([k,l])=>`<option value="${k}"${(+st.comp)===k?' selected':''}>${l}</option>`).join('')}</select></label></div>
 ${(+st.payout)>0?'<div class="muted" style="font-size:11px;margin:-6px 0 12px">Interest is paid out, so it doesn\'t compound. Each payout shows up in Due for you to confirm.</div>':''}
-${sd.matValue>0?`<div class="note mv" >${rd?`${st.termMonths||0} deposits of ${money(parseFloat(st.monthly)||0,0,st.currency)}`:money(parseFloat(st.principal)||0,0,st.currency)} → matures <b class="num">${money((+st.payout)>0?sd.principal:sd.matValue,0,st.currency)}</b>${sd.maturity?` on ${dlabel(sd.maturity,1)}`:''}. Interest <b class="num">${money(sd.interest||(sd.perPayout*(+st.payout)*((parseInt(st.termMonths)||0)/12)),0,st.currency)}</b>${D.settings.afterTax&&taxRate()>0?` · after tax ${money(netOf(sd.interest||(sd.perPayout*(+st.payout)*((parseInt(st.termMonths)||0)/12))),0,st.currency)}`:''}.</div>`:''}`})()
+${sd.matValue>0?`<div class="note mv" >${rd?`${st.termMonths||0} deposits of ${money(nv(st.monthly)||0,0,st.currency)}`:money(nv(st.principal)||0,0,st.currency)} → matures <b class="num">${money((+st.payout)>0?sd.principal:sd.matValue,0,st.currency)}</b>${sd.maturity?` on ${dlabel(sd.maturity,1)}`:''}. Interest <b class="num">${money(sd.interest||(sd.perPayout*(+st.payout)*((parseInt(st.termMonths)||0)/12)),0,st.currency)}</b>${D.settings.afterTax&&taxRate()>0?` · after tax ${money(netOf(sd.interest||(sd.perPayout*(+st.payout)*((parseInt(st.termMonths)||0)/12))),0,st.currency)}`:''}.</div>`:''}`})()
 :(()=>{const g=st.kind==='gold';const sym=CUR[st.currency].sym;
 const held=isDep({kind:st.kind})?'':st.kind==='land'?`<div class="g2"><label class="field" style="margin:0"><div>Area</div><input class="num" data-la="1" inputmode="decimal" value="${st.area??''}" placeholder="1000"></label><label class="field" style="margin:0"><div>Measured in</div><select id="lau">${Object.entries(AREA).map(([k,l])=>`<option value="${k}"${(st.areaUnit||'sqft')===k?' selected':''}>${l}</option>`).join('')}</select></label></div>
 <div class="g2"><label class="field" style="margin:0"><div>State</div><select id="gst">${['',...STATES].map(x=>`<option value="${esc(x)}"${(st.state||'')===x?' selected':''}>${x||'Not set'}</option>`).join('')}</select></label><label class="field" style="margin:0"><div>Pincode</div><input id="lpin" inputmode="numeric" value="${esc(st.pin||'')}" placeholder="500001"></label></div>
@@ -622,7 +623,7 @@ const per=st.priceUnit==='10g'?10:1;const uLbl=st.priceUnit==='10g'?'10 g':'gram
 const rate=g?`<div class="g2">${['22','24'].map(k=>`<label class="field" style="margin:0"><div>${PURITY[k].label} rate / ${uLbl} (${sym})</div><input class="num" data-rk="${k}" data-per="${per}" inputmode="decimal" value="${st.rates?.[k]?+(st.rates[k]*per).toFixed(2):''}" placeholder="0.00"></label>`).join('')}</div>`
 :`<label class="field"><div>Price per ${(unitLabel({kind:st.kind})||'unit').replace(/s$/,'')} today (${sym})</div><input class="num" data-rk="unit" data-per="1" inputmode="decimal" value="${st.rates?.unit??''}" placeholder="0.00"></label>`;
 const cost=+st.init.cost||0;let val=0,any=false;
-if(st.kind==='land'){const ar=parseFloat(st.area)||0,r=+(st.rates?.unit||0);if(ar>0&&r>0){val=ar*r;any=true}}
+if(st.kind==='land'){const ar=nv(st.area)||0,r=+(st.rates?.unit||0);if(ar>0&&r>0){val=ar*r;any=true}}
 else if(g){['18','22','24'].forEach(k=>{const grams=+(st.init.byPurity?.[k]||0);const r=+(st.rates?.[k]||0);if(grams&&r){val+=grams*r;any=true}})}
 else{const u=+(st.init.units||0),r=+(st.rates?.unit||0);if(u&&r){val=u*r;any=true}}
 if(isDep({kind:st.kind}))return'';
@@ -643,20 +644,20 @@ ${st.type==='credit'?`<div class="g2"><label class="field" style="margin:0"><div
 <label class="field"><div>0% promotion until <span class="muted">(optional)</span></div><input id="cpro" type="date" value="${st.promoUntil||''}"></label>
 <div class="g2"><label class="field" style="margin:0"><div>Minimum: floor (${CUR[st.currency].sym})</div><input id="cmf" class="num" inputmode="decimal" value="${esc(st.minFloor)}" placeholder="500"></label><label class="field" style="margin:0"><div>or % of balance</div><input id="cmp" class="num" inputmode="decimal" value="${esc(st.minPct)}" placeholder="5"></label></div>
 <label class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px"><input type="checkbox" id="cmi" style="width:auto"${st.minPlusInt?' checked':''}><span style="font-size:14px">Minimum also adds that month's interest (Amex style)</span></label>
-${st.promoUntil&&st.promoUntil>=today()?`<div class="note in" >0% until ${dlabel(st.promoUntil,1)} — no interest until then. After that, ${st.apr?esc(st.apr)+'%':'your regular APR'} applies to whatever is left.</div>`:parseFloat(st.apr)>0?`<div class="note mv" >Interest only applies if you don't pay the statement balance by the due date. Pay in full and it stays at zero.</div>`:''}`:''}
+${st.promoUntil&&st.promoUntil>=today()?`<div class="note in" >0% until ${dlabel(st.promoUntil,1)} — no interest until then. After that, ${st.apr?esc(st.apr)+'%':'your regular APR'} applies to whatever is left.</div>`:nv(st.apr)>0?`<div class="note mv" >Interest only applies if you don't pay the statement balance by the due date. Pay in full and it stays at zero.</div>`:''}`:''}
 ${st.type==='loan'?`<div class="g2"><label class="field"><div>Outstanding now (${CUR[st.currency].sym})</div><input id="apr" class="num" inputmode="decimal" value="${esc(st.principal)}" placeholder="1000000"></label><label class="field"><div>Interest rate (% per year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="10"></label></div>
 <div class="g2"><label class="field"><div>Balance updates on day</div><select id="asd">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${st.stDay===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label><label class="field"><div>Day-count basis</div><select id="ab2"><option value="365"${st.basis===365?' selected':''}>365</option><option value="360"${st.basis===360?' selected':''}>360</option></select></label></div>
-<div class="g2"><label class="field"><div>Months left <span class="muted">as of ${st.since?dlabel(st.since,1):'the balance date'}</span></div><input id="amo" class="num" inputmode="numeric" value="${esc(st.months)}" placeholder="12">${(()=>{const n=parseInt(st.months)||0;if(!(n>0)||!st.since)return'';const d=new Date(st.since+'T00:00:00');d.setMonth(d.getMonth()+n);return `<div class="muted" style="font-size:11px;margin-top:4px">Tenure ends ${mlabel(mk(d.toISOString().slice(0,10)))}</div>`})()}</label><label class="field"><div>EMI amount</div><input id="aemi" class="num" inputmode="decimal" value="${esc(st.emi)}" placeholder="0.00"></label></div>
-${(()=>{const P=parseFloat(st.principal)||0,R=parseFloat(st.rate)||0,n=parseInt(st.months)||0,e=parseFloat(st.emi)||0;
+<div class="g2"><label class="field"><div>Months left <span class="muted">as of ${st.since?dlabel(st.since,1):'the balance date'}</span></div><input id="amo" class="num" inputmode="numeric" value="${esc(st.months)}" placeholder="12">${(()=>{const n=parseInt(String(st.months).replace(/[^0-9]/g,''))||0;if(!(n>0)||!st.since)return'';const d=new Date(st.since+'T00:00:00');d.setMonth(d.getMonth()+n);return `<div class="muted" style="font-size:11px;margin-top:4px">Tenure ends ${mlabel(mk(d.toISOString().slice(0,10)))}</div>`})()}</label><label class="field"><div>EMI amount</div><input id="aemi" class="num" inputmode="decimal" value="${esc(st.emi)}" placeholder="0.00"></label></div>
+${(()=>{const P=nv(st.principal)||0,R=nv(st.rate)||0,n=parseInt(String(st.months).replace(/[^0-9]/g,''))||0,e=nv(st.emi)||0;
 if(P>0&&R>0&&n>0){const calc=emiFor(P,R,n);const diff=e>0?e-calc:0;
 return`<div class="note mv" >EMI works out to <b class="num">${money(calc,0,st.currency)}</b> for ${n} months at ${R}%.${e>0&&Math.abs(diff)>1?` Your bank says ${money(e,0,st.currency)} — ${money(Math.abs(diff),0,st.currency)} ${diff>0?'more':'less'}; yours is used.`:e>0?' Matches what you entered.':''}${e>0?'':' <span class="muted">Saved as your EMI unless you type a different one.</span>'}</div>`}
 if(P>0&&R>0&&e>0){const m=monthsFor(P,R,e);return`<div class="note mv" >${m?`At ${money(e,0,st.currency)} a month this finishes in about <b>${m}</b> months (${mlabel(shiftMonth(mk(today()),m))}).`:`${money(e,0,st.currency)} doesn't cover the monthly interest — the balance would grow.`}</div>`}
 return''})()}
 <div class="g2"><label class="field"><div>EMI is paid on day</div><select id="aed">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${(st.emiDay||st.stDay)===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label><label class="field"><div>Outstanding as of</div><input id="asn" type="date" value="${st.since}"></label></div>
 <label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="asdue" style="width:auto"${st.showDue?' checked':''}><span style="font-size:14px">Show the EMI as due on Home</span></label>
-${parseFloat(st.principal)>0&&parseFloat(st.rate)>0?`<div class="note mv" ><b class="num">${money(parseFloat(st.principal)*parseFloat(st.rate)/100/st.basis,0,st.currency)} interest per day</b> at today's balance (${esc(st.principal)} × ${esc(st.rate)} ÷ ${st.basis*100}). Every payment lowers it from that day.</div>`:''}`:''}
+${nv(st.principal)>0&&nv(st.rate)>0?`<div class="note mv" ><b class="num">${money(nv(st.principal)*nv(st.rate)/100/st.basis,0,st.currency)} interest per day</b> at today's balance (${esc(st.principal)} × ${esc(st.rate)} ÷ ${st.basis*100}). Every payment lowers it from that day.</div>`:''}`:''}
 ${st.type!=='invest'&&st.type!=='loan'?`<label class="field"><div>${cr?'Balance owed when you start tracking':st.type==='held'?'Amount already with them':'Balance when you start tracking'} (${CUR[st.currency].sym})</div><input id="ao" class="num" inputmode="decimal" value="${esc(st.opening)}" placeholder="0.00"></label>`:''}
-${edit&&b!=null&&st.type!=='invest'&&st.type!=='loan'?(()=>{const shown=cr?-b:b;const says=parseFloat(st.bankSays);const diff=isNaN(says)?null:Math.round((says-shown)*100)/100;
+${edit&&b!=null&&st.type!=='invest'&&st.type!=='loan'?(()=>{const shown=cr?-b:b;const says=nv(st.bankSays);const diff=isNaN(says)?null:Math.round((says-shown)*100)/100;
 return`<div class="card" style="padding:12px 14px;margin-bottom:14px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>App ${cr?'says you owe':'balance'}</span><b class="num">${money(shown,0,st.currency)}</b></div>
 <label class="field" style="margin:10px 0 0"><div>Balance check — what does your bank app show? (${CUR[st.currency].sym})</div><input id="bs" class="num" inputmode="decimal" value="${esc(st.bankSays)}" placeholder="Type it to compare"></label>
 ${diff===null?'':diff===0?'<div class="in" style="font-size:13px;margin-top:8px">✓ Matches exactly.</div>':`<div style="font-size:13px;margin-top:8px">Off by <b class="num ${diff>0?'in':'out'}">${money(Math.abs(diff),0,st.currency)}</b> — the bank shows ${diff>0?'more':'less'}${cr?' owed':''}.</div><button class="btn" id="adj" style="margin-top:8px;font-size:14px;padding:10px">Add a ${money(Math.abs(diff),0,st.currency)} adjustment so they match</button>`}</div>`})():''}
@@ -678,7 +679,7 @@ $('logoHide')&&($('logoHide').onclick=()=>{grab();st.showLogo=false;st.logoUrl='
 setTimeout(suggest,0);$('ab').onchange=()=>{st.opening=$('ao').value;st.logoUrl=$('al')?$('al').value:st.logoUrl;renderSheet()};
 $('al')&&($('al').oninput=e=>st.logoUrl=e.target.value.trim(),$('al').onchange=()=>{st.opening=$('ao').value;renderSheet()});
 $('bs')&&($('bs').oninput=e=>{st.bankSays=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.bankSays;st.opening=$('ao').value;const pos=e.target.selectionStart;renderSheet();const nb=document.getElementById('bs');nb.focus();nb.setSelectionRange(pos,pos)});
-$('adj')&&($('adj').onclick=()=>{const b=balances()[edit.id];const cr=st.type==='credit';const shown=cr?-b:b;const diff=Math.round((parseFloat(st.bankSays)-shown)*100)/100;if(!diff)return;
+$('adj')&&($('adj').onclick=()=>{const b=balances()[edit.id];const cr=st.type==='credit';const shown=cr?-b:b;const diff=Math.round((nv(st.bankSays)-shown)*100)/100;if(!diff)return;
 const more=diff>0;const type=cr?(more?'expense':'income'):(more?'income':'expense');
 D.txns.push({id:uid(),created:Date.now(),type,amount:Math.abs(diff),date:today(),accountId:edit.id,category:'Adjustment',note:'Balance correction to match bank'});sheet=null;save();toast('Adjustment added — balances now match')});
 const grab=()=>{['ao','ar','apr','aemi','amo','amon','aterm','capr','clim','cmf','cmp'].forEach(k=>{if($(k))st[{ao:'opening',ar:'rate',apr:'principal',aemi:'emi',amo:'months',amon:'monthly',aterm:'termMonths',capr:'apr',clim:'limit',cmf:'minFloor',cmp:'minPct'}[k]]=$(k).value});if($('ab'))st.bank=$('ab').value;if($('al'))st.logoUrl=$('al').value};
@@ -714,7 +715,7 @@ $('cmf')&&($('cmf').oninput=e=>{st.minFloor=e.target.value.replace(/[^0-9.]/g,''
 $('cmp')&&($('cmp').oninput=e=>{st.minPct=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.minPct});
 $('cmi')&&($('cmi').onchange=e=>st.minPlusInt=e.target.checked);
 $('gcal')&&($('gcal').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'');st.calIn=e.target.value});
-$('calBtn')&&($('calBtn').onclick=async()=>{grab();pull();const local=parseFloat(st.calIn)/(st.priceUnit==='10g'?10:1);
+$('calBtn')&&($('calBtn').onclick=async()=>{grab();pull();const local=nv(st.calIn)/(st.priceUnit==='10g'?10:1);
 if(!(local>0)){st.fmsg='Type the 24k rate you see locally first.';return renderSheet()}
 st.busy=true;st.fmsg='';renderSheet();
 try{const r=await fetchGold(st.currency,1);const ratio=local/r.perGram['24'];st.cal={ratio,spot:Math.round(r.perGram['24']*100)/100,date:today()};
@@ -728,10 +729,10 @@ st.fmsg=ratio===1?`Market rate via ${r.source}: ${money(r.perGram['24'],0,st.cur
 catch(e){st.fmsg="Couldn't reach a price service (offline, or it's blocked). Type the rate in instead."}
 st.busy=false;renderSheet()});$('asdue')&&($('asdue').onchange=e=>st.showDue=e.target.checked);$('ac').onchange=e=>{st.currency=e.target.value;st.opening=$('ao').value;st.bank=$('ab').value;renderSheet()};$('ao')&&($('ao').oninput=e=>st.opening=e.target.value.replace(/[^0-9.]/g,''));
 $('settleBtn')&&($('settleBtn').onclick=()=>openPerson(edit));
-$('ok').onclick=()=>{if(!st.name.trim())return;const o=parseFloat(st.opening)||0;const a={id:edit?.id||uid(),name:st.name.trim(),bank:st.bank.trim(),type:st.type,currency:st.currency,logoUrl:st.logoUrl||undefined,opening:(st.type==='invest'||st.type==='loan')?0:(st.type==='credit'?-o:o)};
-if(st.type==='invest'){a.kind=st.kind;pull();a.rates=st.rates;a.rateAt=st.rateAt||undefined;a.init=st.init;a.state=st.state||undefined;a.priceUnit=st.priceUnit;a.cal=st.cal||undefined;if(st.kind==='land'){a.area=parseFloat(st.area)||0;a.areaUnit=st.areaUnit;a.pin=st.pin||undefined;a.apprPct=parseFloat(st.apprPct)||0;a.since=st.since;if(!a.rateAt&&a.rates?.unit)a.rateAt=today()}if(isDep({kind:st.kind})){a.rate=parseFloat(st.rate)||0;a.since=st.since;a.termMonths=parseInt(st.termMonths)||0;a.comp=+st.comp;a.payout=+st.payout;if(st.kind==='rd'){a.monthly=parseFloat(st.monthly)||0;a.day=+st.day}else a.principal=parseFloat(st.principal)||0}}
-if(st.type==='credit'){a.closeDay=+st.closeDay||1;a.dueDay=+st.dueDay||1;a.limit=parseFloat(st.limit)||0;a.apr=parseFloat(st.apr)||0;a.promoUntil=st.promoUntil||undefined;a.minFloor=parseFloat(st.minFloor)||0;a.minPct=parseFloat(st.minPct)||0;a.minPlusInt=st.minPlusInt||undefined}
-if(st.type==='loan'){a.rate=parseFloat(st.rate)||0;a.principal=parseFloat(st.principal)||0;a.months=parseInt(st.months)||0;a.emi=parseFloat(st.emi)||(a.months?Math.round(emiFor(a.principal,a.rate,a.months)*100)/100:0);a.emiDay=st.emiDay||st.stDay;a.stDay=st.stDay;a.basis=st.basis;a.since=st.since;a.showDue=st.showDue}
+$('ok').onclick=()=>{if(!st.name.trim())return;const o=nv(st.opening)||0;const a={id:edit?.id||uid(),name:st.name.trim(),bank:st.bank.trim(),type:st.type,currency:st.currency,logoUrl:st.logoUrl||undefined,opening:(st.type==='invest'||st.type==='loan')?0:(st.type==='credit'?-o:o)};
+if(st.type==='invest'){a.kind=st.kind;pull();a.rates=st.rates;a.rateAt=st.rateAt||undefined;a.init=st.init;a.state=st.state||undefined;a.priceUnit=st.priceUnit;a.cal=st.cal||undefined;if(st.kind==='land'){a.area=nv(st.area)||0;a.areaUnit=st.areaUnit;a.pin=st.pin||undefined;a.apprPct=nv(st.apprPct)||0;a.since=st.since;if(!a.rateAt&&a.rates?.unit)a.rateAt=today()}if(isDep({kind:st.kind})){a.rate=nv(st.rate)||0;a.since=st.since;a.termMonths=parseInt(st.termMonths)||0;a.comp=+st.comp;a.payout=+st.payout;if(st.kind==='rd'){a.monthly=nv(st.monthly)||0;a.day=+st.day}else a.principal=nv(st.principal)||0}}
+if(st.type==='credit'){a.closeDay=+st.closeDay||1;a.dueDay=+st.dueDay||1;a.limit=nv(st.limit)||0;a.apr=nv(st.apr)||0;a.promoUntil=st.promoUntil||undefined;a.minFloor=nv(st.minFloor)||0;a.minPct=nv(st.minPct)||0;a.minPlusInt=st.minPlusInt||undefined}
+if(st.type==='loan'){a.rate=nv(st.rate)||0;a.principal=nv(st.principal)||0;a.months=parseInt(String(st.months).replace(/[^0-9]/g,''))||0;a.emi=nv(st.emi)||(a.months?Math.round(emiFor(a.principal,a.rate,a.months)*100)/100:0);a.emiDay=st.emiDay||st.stDay;a.stDay=st.stDay;a.basis=st.basis;a.since=st.since;a.showDue=st.showDue}
 if(edit)D.accounts=D.accounts.map(x=>x.id===a.id?a:x);else D.accounts.push(a);sheet=null;save();toast(edit?'Account updated':'Account added')};
 $('del')&&($('del').onclick=()=>{if(!confirm('Remove this account and every transaction on it?'))return;D.accounts=D.accounts.filter(a=>a.id!==edit.id);D.txns=D.txns.filter(t=>t.accountId!==edit.id&&t.toAccountId!==edit.id);sheet=null;save();toast('Account removed')});
 if(!edit&&!FOCUSED2){FOCUSED2=1;const e0=$('an');e0&&e0.focus()}}};FOCUSED2=0;renderSheet()}
@@ -793,13 +794,13 @@ if(mine&&shares.length){const total=grp.reduce((a,b)=>a+b.amount,0);
 edit=Object.assign({},mine,{amount:total,_bsplit:true,_who:shares.map(x=>x.toAccountId),_shares:Object.fromEntries(shares.map(x=>[x.toAccountId,String(x.amount)])),_grp:grp.map(x=>x.id)});}}const curOfForm=()=>{const a=acct(st&&st.accountId);return a?cur(a):R.cur};if(!D.accounts.length)return openAccount();if(!edit&&preset)edit=null;const P=preset||{};
 const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,payer:edit?.payer||'',isplit:!!(edit&&edit.isplit),imode:(edit&&(edit._imode||edit.imode))||(localStorage.getItem('ledger-imode')||'pct'),ito:(edit&&edit._ito)?edit._ito.slice():((edit&&edit.ito)?edit.ito.slice():JSON.parse(localStorage.getItem('ledger-ito')||'[]')),oneOff:!!edit?.oneOff,more:!!(edit&&(edit.note||edit.oneOff||(edit.who&&edit.who.length))),split:!!(edit?.who&&edit.who.length)||!!(edit&&edit._bsplit)||!!P.split,who:edit?._who?[...edit._who]:(edit?.who?[...edit.who]:(P.who?[...P.who]:[])),mode:edit?._shares?'amt':(edit?.smode||'even'),amt:edit?._shares?{...edit._shares}:(edit?.amt?{...edit.amt}:{}),pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||D.accounts[0].id,toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
 const fx=()=>st.type==='transfer'&&st.toAccountId&&cur(acct(st.accountId))!==cur(acct(st.toAccountId));
-const valid=()=>{const a=parseFloat(st.amount);if(!(a>0)||!st.accountId)return false;
-if(st.type==='invest'){const inv=acct(st.toAccountId);return !!inv&&(!usesUnits(inv)||parseFloat(st.units)>0)}return st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId&&(!fx()||parseFloat(st.toAmount)>0))};
+const valid=()=>{const a=nv(st.amount);if(!(a>0)||!st.accountId)return false;
+if(st.type==='invest'){const inv=acct(st.toAccountId);return !!inv&&(!usesUnits(inv)||nv(st.units)>0)}return st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId&&(!fx()||nv(st.toAmount)>0))};
 const opts=sel=>D.accounts.map(a=>`<option value="${a.id}"${sel===a.id?' selected':''}>${esc(a.name)}${a.bank?` (${esc(a.bank)})`:''} · ${cur(a)}</option>`).join('');
-sheet={title:edit?'Edit transaction':'New transaction',tall:true,body(){const cls=st.type==='expense'?'out':st.type==='income'?'in':'mv';const fc=cur(acct(st.accountId)),tc=cur(acct(st.toAccountId));const cats=catsOf(st.type==='income'?'income':'expense',fc);const a=parseFloat(st.amount)||0;const ta=parseFloat(st.toAmount)||0;
+sheet={title:edit?'Edit transaction':'New transaction',tall:true,body(){const cls=st.type==='expense'?'out':st.type==='income'?'in':'mv';const fc=cur(acct(st.accountId)),tc=cur(acct(st.toAccountId));const cats=catsOf(st.type==='income'?'income':'expense',fc);const a=nv(st.amount)||0;const ta=nv(st.toAmount)||0;
 return`<div class="seg" style="grid-template-columns:repeat(${D.accounts.some(isInvest)?4:3},1fr)">${[['expense','Expense','out'],['income','Income','in'],['transfer','Transfer','mv']].concat(D.accounts.some(isInvest)?[['invest','Invest','mv']]:[]).map(([v,l,c])=>`<button data-t="${v}" class="${st.type===v?'on '+c:''}">${l}</button>`).join('')}</div>
 <div class="amtrow" data-formcur="${fc}"><span class="${cls}">${CUR[fc].sym}</span><input id="am" class="num ${cls}" inputmode="decimal" value="${esc(st.amount)}" placeholder="0.00"></div>
-${st.type==='invest'?(()=>{const iv=D.accounts.filter(a=>isInvest(a)&&cur(a)===fc);const inv=acct(st.toAccountId);const amt=parseFloat(st.amount)||0;const u=parseFloat(st.units)||0;
+${st.type==='invest'?(()=>{const iv=D.accounts.filter(a=>isInvest(a)&&cur(a)===fc);const inv=acct(st.toAccountId);const amt=nv(st.amount)||0;const u=nv(st.units)||0;
 return`${acctField(st.sell?'Sell from':'Paid from','fr',st.accountId,st.type)}<div class="g2"><label class="field"><div>${st.sell?'Money into':'Invest in'}</div><select id="to"><option value="">Choose…</option>${iv.map(a=>`<option value="${a.id}"${st.toAccountId===a.id?' selected':''}>${esc(a.name)} · ${KINDS[a.kind]}</option>`).join('')}</select></label></div>
 ${!iv.length?`<div class="note out" >No ${fc} investment accounts yet — add one from Menu › Investments.</div>`:''}
 ${inv&&usesUnits(inv)?`<div class="g2">${inv.kind==='gold'?`<label class="field"><div>Purity</div><select id="pu">${Object.entries(PURITY).map(([k,v])=>`<option value="${k}"${(st.purity||'22')===k?' selected':''}>${v.label}</option>`).join('')}</select></label>`:''}<label class="field"><div>${unitLabel(inv)[0].toUpperCase()+unitLabel(inv).slice(1)}</div><input id="un" class="num" inputmode="decimal" value="${esc(st.units)}" placeholder="0.000"></label></div>
@@ -825,7 +826,7 @@ ${fx()?`<label class="field"><div>Amount received in ${tc} (${CUR[tc].sym}) — 
 const rows=(st.ito||[]).filter(r=>!!r);
 const calc=()=>{if(!rows.length)return[];
 if(st.imode==='even'){const n=rows.filter(r=>acct(r.id)).length;const per=n?amt/(n+1):0;return rows.map(r=>({...r,v:acct(r.id)?per:0}))}
-if(st.imode==='pct')return rows.map(r=>({...r,v:amt*(parseFloat(r.pct)||0)/100}));
+if(st.imode==='pct')return rows.map(r=>({...r,v:amt*(nv(r.pct))/100}));
 return rows.map(r=>({...r,v:parseFloat(String(r.amt||'').replace(/[^0-9.]/g,''))||0}))};
 const cs=calc();const away=cs.reduce((a,b)=>a+b.v,0);const mine=amt-away;
 return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${st.isplit?'8px':'12px'}"><input type="checkbox" id="isp" style="width:auto;margin-top:3px"${st.isplit?' checked':''}><span style="font-size:14px;line-height:1.4">Goes to more than one account<br><span class="muted" style="font-size:11px">Salary paid into two or more of your accounts.</span></span></label>
@@ -836,7 +837,7 @@ ${st.imode==='pct'?`<label class="field" style="margin:0"><div>Share (%)</div><i
 <button type="button" class="link" data-irm="${i}" style="font-size:12px;grid-column:1/-1;text-align:left;color:var(--out)">Remove</button></div>`).join('')}
 <button type="button" class="btn" id="iadd" style="margin-bottom:8px">Add another account</button>
 ${amt>0?`<div class="note ${Math.abs(mine)<0.005||mine>0?'mv':'out'}">${esc(acct(st.accountId)?.name||'Main account')} ${money(mine,0,fc)}${cs.map(r=>` · ${esc(acct(r.id)?.name||'')} ${money(r.v,0,fc)}`).join('')}${mine<-0.005?` — that is ${money(-mine,0,fc)} more than the total`:''}</div>`:''}
-</div>`:''}`})():''}${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=parseFloat(st.amount)||0;
+</div>`:''}`})():''}${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=nv(st.amount)||0;
 const sel=(st.who||[]).filter(id=>acct(id));const mode=st.mode||'even';
 const shares={};if(sel.length){if(mode==='even'){const each=Math.floor(amt/(sel.length+1)*100)/100;sel.forEach(id=>shares[id]=each)}
 else if(mode==='all'){const each=Math.floor(amt/sel.length*100)/100;sel.forEach(id=>shares[id]=each)}
@@ -854,7 +855,7 @@ ${(mode==='custom'||mode==='pct')?sel.map(id=>{const a=acct(id);return`<div styl
 <div style="display:flex;align-items:center;gap:10px;padding:8px 0 4px;border-top:1px solid var(--line);margin-top:4px"><span style="flex:1;font-size:14px">Your share</span><b class="num" style="font-size:14px">${money(mine,0,fc)}</b></div>
 <div class="note ${over?'out':'mv'}" style="background:var(--${over?'outS':'mvS'});margin:6px 0 0">${over?`Shares add up to ${money(owed,0,fc)} — more than the ${money(amt,0,fc)} bill.`:`${money(amt,0,fc)} bill · ${money(owed,0,fc)} owed to you · ${money(mine,0,fc)} yours`}</div>`
 :'<div class="muted" style="font-size:13px">Tap the people who were in on this bill — then choose how to split it.</div>'}</div>`:''}`})():''}
-${st.type==='expense'||st.type==='income'?(()=>{const amt=parseFloat(st.amount)||0;const catOn=st.category&&oneOffCats().includes(st.category);
+${st.type==='expense'||st.type==='income'?(()=>{const amt=nv(st.amount)||0;const catOn=st.category&&oneOffCats().includes(st.category);
 const hist=D.txns.filter(t=>t.type===st.type&&t.category===st.category&&cur(acct(t.accountId))===fc&&t.id!==edit?.id).map(t=>t.amount);
 const avg=hist.length?hist.reduce((a,b)=>a+b,0)/hist.length:0;const big=avg>0&&amt>avg*3;
 return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${big&&!st.oneOff&&!catOn?'6px':'12px'}"><input type="checkbox" id="oneoff" style="width:auto;margin-top:3px"${st.oneOff||catOn?' checked':''}${catOn?' disabled':''}><span style="font-size:14px;line-height:1.4">One-off — keep it out of my averages<br><span class="muted" style="font-size:11px">${catOn?`"${esc(st.category)}" is marked one-off for every entry.`:'Still counts in your balances and reports; only excluded from the monthly average used to project your wealth target.'}</span></span></label>
@@ -921,7 +922,7 @@ $('ok').onclick=()=>{if(!valid())return;
 if(st.type==='income'&&st.isplit){const amt=Math.round((parseFloat(String(st.amount).replace(/[^0-9.]/g,''))||0)*100)/100;const rows=(st.ito||[]).filter(r=>r&&acct(r.id));
 if(rows.length){const total=Math.round(amt*100)/100;const gid=uid();
 let cs;if(st.imode==='even'){const per=Math.round((total/(rows.length+1))*100)/100;cs=rows.map(r=>({id:r.id,v:per}))}
-else if(st.imode==='pct')cs=rows.map(r=>({id:r.id,v:Math.round(total*(parseFloat(r.pct)||0))/100}));
+else if(st.imode==='pct')cs=rows.map(r=>({id:r.id,v:Math.round(total*(nv(r.pct)))/100}));
 else cs=rows.map(r=>({id:r.id,v:Math.round((parseFloat(String(r.amt||'').replace(/[^0-9.]/g,''))||0)*100)/100}));
 const away=cs.reduce((a,b)=>a+b.v,0);const mine=Math.round((total-away)*100)/100;
 if(mine<-0.005){toast('That is more than the total');return}
@@ -931,10 +932,10 @@ if(mine>0.005)D.txns.push({id:uid(),created:Date.now(),type:'income',amount:mine
 cs.forEach(r=>{if(r.v>0.005)D.txns.push({id:uid(),created:Date.now(),type:'income',amount:r.v,date:st.date,accountId:r.id,...meta})});
 localStorage.setItem('ledger-imode',st.imode);localStorage.setItem('ledger-ito',JSON.stringify(rows.map(r=>({id:r.id,pct:r.pct||'',amt:r.amt||''}))));
 save();closeSheet();render();toast(edit?'Saved':'Added');if(onSaved)onSaved();return}}
-if(st.type==='invest'){const inv=acct(st.toAccountId);const amt=Math.round(parseFloat(st.amount)*100)/100;const u=usesUnits(inv)?Math.round(parseFloat(st.units)*1000)/1000:undefined;
+if(st.type==='invest'){const inv=acct(st.toAccountId);const amt=Math.round(nv(st.amount)*100)/100;const u=usesUnits(inv)?Math.round(nv(st.units)*1000)/1000:undefined;
 const t={id:edit?.id||uid(),created:edit?.created||Date.now(),type:'transfer',amount:amt,date:st.date,recvDate:st.date,accountId:st.sell?st.toAccountId:st.accountId,toAccountId:st.sell?st.accountId:st.toAccountId,units:u,purity:inv.kind==='gold'?st.purity:undefined,sell:st.sell||undefined,note:st.note.trim()||((st.sell?'Sold ':'Bought ')+(u?u+' '+unitLabel(inv)+' ':'')+inv.name)};
 if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);sheet=null;if(onSaved)onSaved(t);save();toast(st.sell?'Sale recorded':'Investment recorded');return}
-if(st.type==='expense'&&st.split&&(st.who||[]).length){const amt=Math.round(parseFloat(st.amount)*100)/100;const sel=st.who.filter(id=>acct(id));const m=st.mode||'even';const sh={};
+if(st.type==='expense'&&st.split&&(st.who||[]).length){const amt=Math.round(nv(st.amount)*100)/100;const sel=st.who.filter(id=>acct(id));const m=st.mode||'even';const sh={};
 if(m==='even'){const each=Math.floor(amt/(sel.length+1)*100)/100;sel.forEach(id=>sh[id]=each)}
 else if(m==='all'){const each=Math.floor(amt/sel.length*100)/100;sel.forEach(id=>sh[id]=each)}
 else if(m==='pct'){sel.forEach(id=>sh[id]=Math.round(amt*(+(st.pct?.[id]||0))/100*100)/100)}
@@ -947,7 +948,7 @@ if(mine>0)D.txns.push({id:uid(),created:Date.now(),gid,type:'expense',amount:min
 Object.entries(sh).forEach(([pid,v])=>{if(st.payer)return;if(v>0)D.txns.push({id:uid(),created:Date.now(),gid,type:'transfer',amount:v,date:st.date,recvDate:st.date,accountId:st.accountId,toAccountId:pid,category:st.category,note:(st.note.trim()||st.category||'Shared bill'),lent:true,...meta})});
 sheet=null;save();toast(`Split saved — ${money(mine,0,cur(acct(st.accountId)))} yours, ${money(owed,0,cur(acct(st.accountId)))} owed to you`);return}
 const payAcct=(st.type==='expense'&&st.payer)?st.payer:st.accountId;
-const t={id:edit?.id||uid(),created:edit?.created||Date.now(),oneOff:st.oneOff||undefined,type:st.type,amount:Math.round(parseFloat(st.amount)*100)/100,toAmount:fx()?Math.round(parseFloat(st.toAmount)*100)/100:undefined,date:st.date,recvDate:st.type==='transfer'&&!st.pending?(st.recvDate||st.date):undefined,pending:st.type==='transfer'&&st.pending?true:undefined,accountId:payAcct,toAccountId:st.type==='transfer'?st.toAccountId:undefined,category:st.type==='transfer'?undefined:st.category,note:st.note.trim()};
+const t={id:edit?.id||uid(),created:edit?.created||Date.now(),oneOff:st.oneOff||undefined,type:st.type,amount:Math.round(nv(st.amount)*100)/100,toAmount:fx()?Math.round(nv(st.toAmount)*100)/100:undefined,date:st.date,recvDate:st.type==='transfer'&&!st.pending?(st.recvDate||st.date):undefined,pending:st.type==='transfer'&&st.pending?true:undefined,accountId:payAcct,toAccountId:st.type==='transfer'?st.toAccountId:undefined,category:st.type==='transfer'?undefined:st.category,note:st.note.trim()};
 if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);sheet=null;if(onSaved)onSaved(t);save();toast(t.type==='transfer'?'Transfer recorded':edit?'Saved':'Added')};
 $('del')&&($('del').onclick=()=>{const grp=(edit.isplit&&edit.gid)?D.txns.filter(t=>t.gid===edit.gid):[];
 if(grp.length>1&&!confirm('This is part of a split payment across '+grp.length+' accounts. Delete all of it?'))return;
@@ -1174,12 +1175,12 @@ document.querySelectorAll('[data-gm]').forEach(r=>r.onclick=()=>{const m=r.datas
 document.getElementById('editGoal').onclick=()=>openGoalEdit(g);document.getElementById('cancel').onclick=()=>{sheet=null;tab='goals';render()}}};renderSheet()}
 function openGoalEdit(edit){const st={mode:edit?.mode||'deadline',includeExisting:edit?.includeExisting!==false,name:edit?.name||'',accountIds:[...(edit?.accountIds||[])],perMonth:edit?String(edit.perMonth):'',start:edit?.start||mk(today()),end:edit?.end||'',total:edit?.total?String(edit.total):'',skipMode:edit?.skipMode||'catchup'};
 const savable=D.accounts.filter(a=>a.type!=='credit'&&a.type!=='loan');
-const curOf=()=>st.accountIds.length?cur(acct(st.accountIds[0])):null;
-const modeOf=()=>parseFloat(st.perMonth)>0?'monthly':'deadline';
-const valid=()=>st.name.trim()&&st.accountIds.length&&st.accountIds.every(id=>cur(acct(id))===curOf())&&(modeOf()==='deadline'?(parseFloat(st.total)>0&&st.end&&st.end>=st.start):parseFloat(st.perMonth)>0);
+const curOf=()=>st.accountIds.length?cur(acct(st.accountIds[0])):(typeof R!=='undefined'&&R.cur!=='ALL'?R.cur:null);
+const modeOf=()=>nv(st.perMonth)>0?'monthly':'deadline';
+const valid=()=>st.name.trim()&&st.accountIds.length&&st.accountIds.every(id=>cur(acct(id))===curOf())&&(modeOf()==='deadline'?(nv(st.total)>0&&st.end&&st.end>=st.start):nv(st.perMonth)>0);
 sheet={title:edit?'Edit goal':'New savings goal',body(){const c=curOf()||'USD';return`<label class="field"><div>Goal name</div><input id="gn" value="${esc(st.name)}" placeholder="Emergency fund"></label>
 <div class="field"><div>Counts money moved into</div><div class="card">${savable.map(a=>`<label class="row" style="padding:10px 14px;gap:10px"><input type="checkbox" data-ga="${a.id}" style="width:auto"${st.accountIds.includes(a.id)?' checked':''}>${logoEl(a,28)}<div class="main"><div class="t" style="font-size:14px">${esc(a.name)}</div><div class="s">${a.type==='held'?'with '+esc(a.bank||''):TYPES[a.type]} · ${cur(a)}</div></div></label>`).join('')}</div>${st.accountIds.some(id=>cur(acct(id))!==c)?'<div class="out" style="font-size:12px;margin-top:6px">Pick accounts in one currency only.</div>':''}</div>
-${(()=>{const bal=balances();const curBal=st.accountIds.reduce((a,id)=>a+(bal[id]||0),0);const tot=parseFloat(st.total)||0;const pm=parseFloat(st.perMonth)||0;const base=st.includeExisting?Math.max(0,curBal):0;const need=Math.max(0,tot-base);const left=st.end?monthsBetween(mk(today())>st.start?mk(today()):st.start,st.end).length:0;
+${(()=>{const bal=balances();const curBal=st.accountIds.reduce((a,id)=>a+(bal[id]||0),0);const tot=nv(st.total)||0;const pm=nv(st.perMonth)||0;const base=st.includeExisting?Math.max(0,curBal):0;const need=Math.max(0,tot-base);const left=st.end?monthsBetween(mk(today())>st.start?mk(today()):st.start,st.end).length:0;
 const deadline=tot>0&&st.end&&!pm;
 return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="g2" style="align-items:end"><label class="field" style="margin:0"><div>Reach (${CUR[c].sym})</div><input id="gt" class="num" inputmode="decimal" value="${esc(st.total)}" placeholder="Amount"></label><label class="field" style="margin:0"><div>by</div><input id="ge" type="month" value="${st.end}" min="${st.start}"></label></div>
 <div class="muted" style="text-align:center;margin:10px 0 6px;font-size:12px">— or —</div>
@@ -1197,7 +1198,7 @@ $('gie')&&($('gie').onchange=e=>{st.includeExisting=e.target.checked;snap();rend
 
 document.querySelectorAll('[data-ga]').forEach(cb=>cb.onchange=()=>{const id=cb.dataset.ga;if(cb.checked)st.accountIds.push(id);else st.accountIds=st.accountIds.filter(x=>x!==id);snap();renderSheet()});
 document.querySelectorAll('[data-sm]').forEach(b=>b.onclick=()=>{st.skipMode=b.dataset.sm;snap();renderSheet()});
-$('ok').onclick=()=>{if(!valid())return;const g={id:edit?.id||uid(),mode:modeOf(),name:st.name.trim(),currency:curOf(),accountIds:st.accountIds,perMonth:modeOf()==='monthly'?Math.round(parseFloat(st.perMonth)*100)/100:0,start:st.start,end:st.end||null,total:parseFloat(st.total)>0?Math.round(parseFloat(st.total)*100)/100:null,includeExisting:st.includeExisting,skipMode:st.skipMode,skipped:edit?.skipped||[]};
+$('ok').onclick=()=>{if(!valid())return;const g={id:edit?.id||uid(),mode:modeOf(),name:st.name.trim(),currency:curOf(),accountIds:st.accountIds,perMonth:modeOf()==='monthly'?Math.round(nv(st.perMonth)*100)/100:0,start:st.start,end:st.end||null,total:nv(st.total)>0?Math.round(nv(st.total)*100)/100:null,includeExisting:st.includeExisting,skipMode:st.skipMode,skipped:edit?.skipped||[]};
 if(edit)D.goals=D.goals.map(x=>x.id===g.id?g:x);else D.goals.push(g);save();toast(edit?'Goal saved':'Goal created');openGoalDetail(g)};
 $('del')&&($('del').onclick=()=>{if(!confirm('Delete this goal? Your transactions are not affected.'))return;D.goals=D.goals.filter(x=>x.id!==edit.id);tab='goals';save()});
 document.getElementById('cancel').onclick=()=>edit?openGoalDetail(edit):(sheet=null,renderSheet())}};renderSheet()}
@@ -1234,7 +1235,7 @@ ${Object.keys(tot).length?`<div class="muted num" style="margin:10px 4px">Recurr
 wire(){document.querySelectorAll('[data-rid]').forEach(el=>el.onclick=()=>openRecurringEdit(D.recurring.find(r=>r.id===el.dataset.rid)));document.getElementById('addRec').onclick=()=>openRecurringEdit()}};renderSheet()}
 function openRecurringEdit(edit){const st={name:edit?.name||'',type:edit?.type||'expense',amount:edit?String(edit.amount):'',day:edit?.day||1,rsplit:!!edit?.who,rwho:edit?.who?[...edit.who]:[],rflex:edit?.flex||'',accountId:edit?.accountId||D.accounts[0]?.id,toAccountId:edit?.toAccountId||'',category:edit?.category||'',note:edit?.note||'',active:edit?edit.active!==false:true};
 const opts=sel=>D.accounts.map(a=>`<option value="${a.id}"${sel===a.id?' selected':''}>${esc(a.name)} · ${cur(a)}</option>`).join('');
-const valid=()=>st.name.trim()&&parseFloat(st.amount)>0&&st.accountId&&(st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId));
+const valid=()=>st.name.trim()&&nv(st.amount)>0&&st.accountId&&(st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId));
 sheet={title:edit?'Edit recurring':'New recurring',body(){const c=cur(acct(st.accountId));return`<label class="field"><div>Name</div><input id="rn" value="${esc(st.name)}" placeholder="Rent, subscription, monthly transfer"></label>
 <div class="seg">${[['expense','Expense','out'],['income','Income','in'],['transfer','Transfer','mv']].map(([v,l,cc])=>`<button data-t="${v}" class="${st.type===v?'on '+cc:''}">${l}</button>`).join('')}</div>
 <div class="g2"><label class="field"><div>Amount (${CUR[c].sym})</div><input id="ra" class="num" inputmode="decimal" value="${esc(st.amount)}" placeholder="0.00"></label><label class="field"><div>Day of month</div><select id="rdy">${Array.from({length:31},(_,i)=>`<option value="${i+1}"${st.day===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label></div>
@@ -1253,7 +1254,7 @@ $('rf').onchange=e=>{st.accountId=e.target.value;renderSheet()};$('rt')&&($('rt'
 document.querySelectorAll('[data-rfx]').forEach(b=>b.onclick=()=>{st.rflex=b.dataset.rfx;renderSheet()});
 $('rspl')&&($('rspl').onchange=e=>{st.rsplit=e.target.checked;if(!st.rsplit)st.rwho=[];renderSheet()});
 document.querySelectorAll('[data-rw]').forEach(b=>b.onclick=()=>{const i=st.rwho.indexOf(b.dataset.rw);if(i>=0)st.rwho.splice(i,1);else st.rwho.push(b.dataset.rw);renderSheet()});
-$('ok').onclick=()=>{if(!valid())return;const r={id:edit?.id||uid(),name:st.name.trim(),flex:st.rflex||undefined,split:st.rsplit||undefined,who:st.rwho&&st.rwho.length?st.rwho:undefined,type:st.type,amount:Math.round(parseFloat(st.amount)*100)/100,day:st.day,accountId:st.accountId,toAccountId:st.type==='transfer'?st.toAccountId:undefined,category:st.type==='transfer'?undefined:(st.category||undefined),note:st.note,active:st.active,start:edit?.start||mk(today()),posted:edit?.posted||[]};
+$('ok').onclick=()=>{if(!valid())return;const r={id:edit?.id||uid(),name:st.name.trim(),flex:st.rflex||undefined,split:st.rsplit||undefined,who:st.rwho&&st.rwho.length?st.rwho:undefined,type:st.type,amount:Math.round(nv(st.amount)*100)/100,day:st.day,accountId:st.accountId,toAccountId:st.type==='transfer'?st.toAccountId:undefined,category:st.type==='transfer'?undefined:(st.category||undefined),note:st.note,active:st.active,start:edit?.start||mk(today()),posted:edit?.posted||[]};
 if(edit)D.recurring=D.recurring.map(x=>x.id===r.id?r:x);else D.recurring.push(r);save();toast(edit?'Saved':'Recurring added');openRecurring()};
 $('del')&&($('del').onclick=()=>{D.recurring=D.recurring.filter(x=>x.id!==edit.id);save();openRecurring()});
 document.getElementById('cancel').onclick=()=>openRecurring()}};renderSheet()}
@@ -1741,7 +1742,7 @@ ${mode==='manual'?`<label class="field" style="margin-top:12px"><div>Your rate (
 <div class="muted" style="font-size:11px;margin-top:12px;line-height:1.45">This rate converts your dollar accounts wherever the app shows a combined figure — the All view in Reports, your wealth target, and net worth. Single-currency views never convert anything.</div>`},
 wire(){const $=id=>document.getElementById(id);
 document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{D.settings.fxMode=b.dataset.fxm;msg='';save();openRateSheet()});
-$('rsMan')&&($('rsMan').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){D.settings.fx=v;D.settings.fxMode='manual';save();openRateSheet()}});
+$('rsMan')&&($('rsMan').onchange=e=>{const v=nv(e.target.value);if(v>0){D.settings.fx=v;D.settings.fxMode='manual';save();openRateSheet()}});
 $('rsFetch').onclick=async()=>{busy=true;msg='';renderSheet();
 try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();D.settings.fxSrc=fetchFx.src||'';D.settings.fxAtTime=new Date().toISOString();delete D.settings.fxErr;msg=`Updated to ₹${D.settings.fxLive} from ${D.settings.fxSrc}.`}
 catch(e){D.settings.fxErr=today();msg="Couldn't reach a rate service. Your existing rate is unchanged."}
@@ -1835,7 +1836,7 @@ document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dat
 document.getElementById('scTog')&&(document.getElementById('scTog').onclick=e=>{e.stopPropagation();st.wScaled=!st.wScaled;save();openWealth()});
 document.querySelectorAll('[data-frow]').forEach(b=>b.onclick=()=>{st.wOpen=st.wOpen===b.dataset.frow?'':b.dataset.frow;save();openWealth()});
 document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{st.wInv=b.dataset.inv==='true';save();openWealth()});
-$('wx')&&($('wx').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'')},$('wx').onchange=e=>{st.wExtra=parseFloat(e.target.value)||0;save();openWealth()});
+$('wx')&&($('wx').oninput=e=>{e.target.value=e.target.value.replace(/[^0-9.]/g,'')},$('wx').onchange=e=>{st.wExtra=nv(e.target.value);save();openWealth()});
 document.querySelectorAll('[data-cutk]').forEach(b=>b.onclick=()=>{st.wCuts=st.wCuts||[];const k=b.dataset.cutk;const v=+b.dataset.cutv;
 const i=st.wCuts.findIndex(x=>x.k===k);if(i>=0){st.wCuts.splice(i,1);toast('Removed from your extra')}else{st.wCuts.push({k,v});toast('Counted in your extra')}
 save();openWealth()});
@@ -1850,7 +1851,7 @@ F={q:'',acct:'all',type:'expense',cat:null,month:null,cur:null,year:null,oneOff:
 $('ooHelp')&&($('ooHelp').onclick=()=>toast('Open a transaction and tick "One-off", or mark a whole category in Menu › Categories'));
 
 document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';save();openWealth()});
-$('wfx')&&($('wfx').onchange=e=>{const v=parseFloat(e.target.value)||0;if(v>0){st.fx=v;st.fxMode='manual';save();openWealth()}});
+$('wfx')&&($('wfx').onchange=e=>{const v=nv(e.target.value);if(v>0){st.fx=v;st.fxMode='manual';save();openWealth()}});
 $('fxRetry')&&($('fxRetry').onclick=async()=>{try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;save();openWealth();toast('Rate updated')}catch(e){D.settings.fxErr=today();save();toast("Still couldn't reach the rate service")}});
 $('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';save();openWealth();
 try{const r=await fetchFx('USD','INR');st.fxLive=+r.toFixed(2);st.fxLiveAt=today();st.fxMsg=`Market rate ₹${st.fxLive} per $.${lastTransferFx()?` You last converted at ₹${lastTransferFx()}.`:''}`}
