@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='12.2 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='12.4 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -213,6 +213,18 @@ if(digitsBefore===0)pos=0;
 try{el.setSelectionRange(pos,pos)}catch(e){}
 if(onVal)onVal(raw)});
 el.addEventListener('blur',()=>{el.value=groupNum(el.value,c)})}
+const pctShares=(amt,ids,pctOf)=>{const out={};const raw=ids.map(id=>({id,v:amt*(+(pctOf(id)||0))/100}));
+const floored=raw.map(r=>({id:r.id,c:Math.floor(r.v*100)}));
+let used=floored.reduce((a,b)=>a+b.c,0);const cap=Math.round(amt*100);
+let spare=Math.min(Math.round(raw.reduce((a,b)=>a+b.v,0)*100)-used,cap-used);
+// leftover cents go to the first person listed
+for(let i=0;i<floored.length&&spare>0;i++){const take=Math.min(spare,1);floored[i].c+=take;spare-=take}
+for(let i=0;i<floored.length&&spare>0;i++){floored[i].c+=spare;spare=0}
+floored.forEach(r=>out[r.id]=r.c/100);return out};
+// shares that must cover the whole amount (they owe all / evenly), remainder to the first person
+const evenShares=(amt,ids)=>{const out={};const n=ids.length;if(!n)return out;
+const base=Math.floor((amt*100)/n);let spare=Math.round(amt*100)-base*n;
+ids.forEach((id,i)=>{out[id]=(base+(i===0?spare:0))/100});return out};
 const nv=v=>parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''))||0;
 const numVal=el=>parseFloat(String(el&&el.value||'').replace(/[^0-9.]/g,''))||0;
 const money=(n,sign,c='USD')=>{const s=fmt(Math.abs(n),c);return sign?(n<0?'−':'+')+s:(n<0?'−':'')+s};
@@ -834,7 +846,7 @@ ${fx()?`<label class="field"><div>Amount received in ${tc} (${CUR[tc].sym}) — 
 const rows=(st.ito||[]).filter(r=>!!r);
 const calc=()=>{if(!rows.length)return[];
 if(st.imode==='even'){const n=rows.filter(r=>acct(r.id)).length;const per=n?amt/(n+1):0;return rows.map(r=>({...r,v:acct(r.id)?per:0}))}
-if(st.imode==='pct')return rows.map(r=>({...r,v:amt*(nv(r.pct))/100}));
+if(st.imode==='pct'){const ids=rows.map((r,i)=>String(i));const ps=pctShares(amt,ids,i=>nv(rows[+i].pct));return rows.map((r,i)=>({...r,v:ps[String(i)]}))}
 return rows.map(r=>({...r,v:parseFloat(String(r.amt||'').replace(/[^0-9.]/g,''))||0}))};
 const cs=calc();const away=cs.reduce((a,b)=>a+b.v,0);const mine=amt-away;
 return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${st.isplit?'8px':'12px'}"><input type="checkbox" id="isp" style="width:auto;margin-top:3px"${st.isplit?' checked':''}><span style="font-size:14px;line-height:1.4">Goes to more than one account<br><span class="muted" style="font-size:11px">Salary paid into two or more of your accounts.</span></span></label>
@@ -847,9 +859,9 @@ ${st.imode==='pct'?`<label class="field" style="margin:0"><div>Share (%)</div><i
 ${amt>0?`<div class="note ${Math.abs(mine)<0.005||mine>0?'mv':'out'}">${esc(acct(st.accountId)?.name||'Main account')} ${money(mine,0,fc)}${cs.map(r=>` · ${esc(acct(r.id)?.name||'')} ${money(r.v,0,fc)}`).join('')}${mine<-0.005?` — that is ${money(-mine,0,fc)} more than the total`:''}</div>`:''}
 </div>`:''}`})():''}${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=nv(st.amount)||0;
 const sel=(st.who||[]).filter(id=>acct(id));const mode=st.mode||'even';
-const shares={};if(sel.length){if(mode==='even'){const each=Math.floor(amt/(sel.length+1)*100)/100;sel.forEach(id=>shares[id]=each)}
-else if(mode==='all'){const each=Math.floor(amt/sel.length*100)/100;sel.forEach(id=>shares[id]=each)}
-else if(mode==='pct'){sel.forEach(id=>shares[id]=Math.round(amt*(+(st.pct?.[id]||0))/100*100)/100)}
+const shares={};if(sel.length){if(mode==='even'){const n=sel.length+1;const base=Math.floor(amt*100/n);let spare=Math.round(amt*100)-base*n;sel.forEach((id,i)=>{shares[id]=(base+(i===0?spare:0))/100})}
+else if(mode==='all'){const es=evenShares(amt,sel);sel.forEach(id=>shares[id]=es[id])}
+else if(mode==='pct'){const ps=pctShares(amt,sel,id=>st.pct?.[id]);sel.forEach(id=>shares[id]=ps[id])}
 else sel.forEach(id=>shares[id]=+(st.amt?.[id]||0))}
 const owed=Object.values(shares).reduce((x,y)=>x+y,0);const mine=Math.round((amt-owed)*100)/100;const over=owed>amt+0.005;
 const groups=(D.groups||[]).filter(g=>g.currency===fc);
@@ -930,7 +942,7 @@ $('ok').onclick=()=>{if(!valid())return;
 if(st.type==='income'&&st.isplit){const amt=Math.round((parseFloat(String(st.amount).replace(/[^0-9.]/g,''))||0)*100)/100;const rows=(st.ito||[]).filter(r=>r&&acct(r.id));
 if(rows.length){const total=Math.round(amt*100)/100;const gid=uid();
 let cs;if(st.imode==='even'){const per=Math.round((total/(rows.length+1))*100)/100;cs=rows.map(r=>({id:r.id,v:per}))}
-else if(st.imode==='pct')cs=rows.map(r=>({id:r.id,v:Math.round(total*(nv(r.pct)))/100}));
+else if(st.imode==='pct'){const ids=rows.map((r,i)=>String(i));const ps=pctShares(total,ids,i=>nv(rows[+i].pct));cs=rows.map((r,i)=>({id:r.id,v:ps[String(i)]}))}
 else cs=rows.map(r=>({id:r.id,v:Math.round((parseFloat(String(r.amt||'').replace(/[^0-9.]/g,''))||0)*100)/100}));
 const away=cs.reduce((a,b)=>a+b.v,0);const mine=Math.round((total-away)*100)/100;
 if(mine<-0.005){toast('That is more than the total');return}
@@ -944,9 +956,9 @@ if(st.type==='invest'){const inv=acct(st.toAccountId);const amt=Math.round(nv(st
 const t={id:edit?.id||uid(),created:edit?.created||Date.now(),type:'transfer',amount:amt,date:st.date,recvDate:st.date,accountId:st.sell?st.toAccountId:st.accountId,toAccountId:st.sell?st.accountId:st.toAccountId,units:u,purity:inv.kind==='gold'?st.purity:undefined,sell:st.sell||undefined,note:st.note.trim()||((st.sell?'Sold ':'Bought ')+(u?u+' '+unitLabel(inv)+' ':'')+inv.name)};
 if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);sheet=null;if(onSaved)onSaved(t);save();toast(st.sell?'Sale recorded':'Investment recorded');return}
 if(st.type==='expense'&&st.split&&(st.who||[]).length){const amt=Math.round(nv(st.amount)*100)/100;const sel=st.who.filter(id=>acct(id));const m=st.mode||'even';const sh={};
-if(m==='even'){const each=Math.floor(amt/(sel.length+1)*100)/100;sel.forEach(id=>sh[id]=each)}
-else if(m==='all'){const each=Math.floor(amt/sel.length*100)/100;sel.forEach(id=>sh[id]=each)}
-else if(m==='pct'){sel.forEach(id=>sh[id]=Math.round(amt*(+(st.pct?.[id]||0))/100*100)/100)}
+if(m==='even'){const n=sel.length+1;const base=Math.floor(amt*100/n);let spare=Math.round(amt*100)-base*n;sel.forEach((id,i)=>{sh[id]=(base+(i===0?spare:0))/100})}
+else if(m==='all'){const es=evenShares(amt,sel);sel.forEach(id=>sh[id]=es[id])}
+else if(m==='pct'){const ps=pctShares(amt,sel,id=>st.pct?.[id]);sel.forEach(id=>sh[id]=ps[id])}
 else sel.forEach(id=>{const v=+(st.amt?.[id]||0);if(v>0)sh[id]=Math.round(v*100)/100});
 const owed=Object.values(sh).reduce((x,y)=>x+y,0);
 if(owed>amt+0.005){toast('Shares add up to more than the bill');return}
