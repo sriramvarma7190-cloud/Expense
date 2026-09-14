@@ -184,7 +184,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='11.3 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='11.4 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -461,7 +461,7 @@ ${F.all?'':curToggle()}<div class="qwrap" style="margin-top:10px"><input id="q" 
 ${(()=>{const rec=(D.recent||[]),sav=(D.saved||[]);if(!rec.length&&!sav.length)return'';
 return`<div style="margin-top:8px">${sav.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Saved</div><div class="chips" style="margin-bottom:8px">${sav.map((f,i)=>`<button type="button" data-sf="${i}" style="background:var(--mvS);border-color:var(--mvBd);color:var(--mv)">${esc(fLabel(f))}</button>`).join('')}</div>`:''}
 ${rec.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Recent</div><div class="chips" style="margin-bottom:4px">${rec.map((f,i)=>`<button type="button" data-rf="${i}">${esc(fLabel(f))}</button>`).join('')}</div>`:''}</div>`})()}
-<div class="filters"><button class="btn" id="faBtn" style="text-align:left;font-size:14px;padding:9px 12px">${F.acct==='all'?'All accounts':esc(acct(F.acct)?.name||'All accounts')} ›</button><select id="fa" style="display:none"><option value="all">All accounts</option>${D.accounts.filter(a=>cur(a)===c).map(a=>`<option value="${a.id}"${F.acct===a.id?' selected':''}>${esc(a.name)}</option>`).join('')}</select><select id="ft">${[['all','All types'],['expense','Expenses'],['income','Income'],['transfer','Transfers']].map(([v,l])=>`<option value="${v}"${F.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
+<div class="filters"><button class="btn" id="faBtn" style="text-align:left;font-size:14px;padding:9px 12px">${F.acct==='all'?'All accounts':esc(acct(F.acct)?.name||'All accounts')} ›</button><select id="fa" style="display:none"><option value="all">All accounts</option>${D.accounts.filter(a=>cur(a)===c).map(a=>`<option value="${a.id}"${F.acct===a.id?' selected':''}>${esc(a.name)}</option>`).join('')}</select><button class="btn" id="ftBtn" style="text-align:left;font-size:14px;padding:9px 12px">${({all:'All types',expense:'Expenses',income:'Income',transfer:'Transfers'})[F.type]||'All types'} ›</button></div>
 ${F.all?rateLine('Amounts')+'':''}
 ${F.cat||F.month||F.year||F.oneOff||F.all?`<div class="tools"><button class="btn" id="clearF" style="background:var(--mvS);color:var(--mv)">${F.all?(F.cat?esc(F.cat)+' · all currencies':'All currencies'):F.oneOff?'One-offs':F.month?mlabel(F.month):F.year?F.year:'All time'}${F.cat?' · '+esc(F.cat):''} &nbsp;×</button></div>`:''}
 <div class="tools"><button class="btn" id="exp">Export CSV</button><button class="btn" id="imp">Import CSV</button><input type="file" id="impFile" accept=".csv,text/csv" hidden></div>
@@ -538,7 +538,7 @@ v.querySelector('#faBtn')?.addEventListener('click',()=>{const back=tab;
 openAcctPicker({title:'Filter by account',current:F.acct==='all'?null:F.acct,type:'filter',
 onCancel:()=>{sheet=null;render()},
 onPick:id=>{F.acct=id;sheet=null;render();rememberSearch(document.querySelectorAll('[data-txn]').length)}})});
-v.querySelector('#ft')?.addEventListener('change',e=>{F.type=e.target.value;render();rememberSearch(document.querySelectorAll('[data-txn]').length)});
+v.querySelector('#ftBtn')?.addEventListener('click',()=>{openTypeFilter()});
 v.querySelector('#backBtn')?.addEventListener('click',goBack);
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>applyFilter((D.recent||[])[+b.dataset.rf]));
@@ -731,6 +731,9 @@ const rKey=t=>'ledger-recent-'+(t||'expense');
 function recentAccts(type){try{return JSON.parse(localStorage.getItem(rKey(type))||'[]')}catch(e){return[]}}
 function noteRecent(type,id){if(!id)return;const l=recentAccts(type).filter(x=>x!==id);l.unshift(id);localStorage.setItem(rKey(type),JSON.stringify(l.slice(0,3)))}
 const PGROUPS=[['Checking & savings',a=>['checking','savings','cash'].includes(a.type)],['Credit cards',a=>a.type==='credit'],['People',a=>isPerson(a)],['Investments',a=>isInvest(a)],['Loans',a=>isLoan(a)]];
+function openTypeFilter(){const opts=[['all','All types','Everything you have recorded'],['expense','Expenses','Money spent'],['income','Income','Money earned'],['transfer','Transfers','Between accounts, or to and from people']];
+sheet={title:'Filter by type',body(){return`<div class="card menu">${opts.map(([v,t,d])=>`<div class="row" data-ftp="${v}"${F.type===v?' style="background:var(--mvS)"':''}><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div>${F.type===v?'<span style="color:var(--mv)">✓</span>':'<span class="muted">›</span>'}</div>`).join('')}</div>`},
+wire(){document.querySelectorAll('[data-ftp]').forEach(el=>el.onclick=()=>{F.type=el.dataset.ftp;sheet=null;render();rememberSearch(document.querySelectorAll('[data-txn]').length)})}};renderSheet()}
 function openAcctPicker(opt){let showAll=false,q='';const all=D.accounts.filter(a=>(!opt.filter||opt.filter(a))&&!(opt.hidePeople&&isPerson(a)));
 sheet={title:opt.title||'Choose an account',body(){const b=balances();
 const spend=a=>SPENDT.includes(a.type)||(opt.withPeople&&isPerson(a));
