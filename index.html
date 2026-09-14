@@ -184,7 +184,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='11.1 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='11.2 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -411,7 +411,7 @@ return`<div class="sec">Goals<span class="r"><button class="link" id="addGoalH" 
 <div class="track"><i style="width:${pct(Math.max(0,wp.net),wt)}%;background:${wp.hit==null?'var(--out)':'var(--accent)'}"></i></div>
 <div class="muted num" style="font-size:11px;margin-top:4px">${money(wp.net,0,c)} of ${money(wt,0,c)}${wp.debtFree!=null&&wp.debtFree>0?' · debt-free '+mLabel(wp.debtFree):''}</div></div>`:''}
 ${gl.map(g=>goalCard(g)).join('')}</div>`})()}
-${transit.length?`<div class="sec">In transit<span class="r">not yet credited</span></div><div class="card">${transit.map(t=>`${txnRow(t,1)}<div class="tools" style="padding:0 14px 12px;margin:0"><button class="btn p" data-recv="${t.id}" style="width:auto;padding:7px 12px;font-size:12px">Received today</button><button class="btn" data-recvd="${t.id}" style="width:auto;padding:7px 12px;font-size:12px">Pick a date</button></div>`).join('')}</div>`:''}
+${transit.length?`<div class="sec">In transit<span class="r">not yet credited</span></div><div class="card">${transit.map(t=>`${txnRow(t,1)}<div class="tools" style="padding:10px 14px 14px;margin:0;border-top:1px solid var(--line);border-top-width:1px"><button class="btn p" data-recv="${t.id}" style="width:auto;padding:7px 12px;font-size:12px">Received today</button><button class="btn" data-recvd="${t.id}" style="width:auto;padding:7px 12px;font-size:12px">Pick a date</button></div>`).join('')}</div>`:''}
 <div class="sec">Accounts<span class="r"><button class="link" id="addAcct" style="font-size:12px">Add account</button></span></div>
 ${gHtml||'<div class="empty" style="padding:20px 0">No '+c+' accounts yet.</div>'}`}
 
@@ -451,7 +451,7 @@ let QT=null,LT=null;function queueRemember(hits){clearTimeout(QT);QT=setTimeout(
 function applyFilter(f){F={q:f.q||'',acct:f.acct||'all',type:f.type||'all',cat:f.cat||null,month:f.month||null,cur:null,year:f.year||null,oneOff:!!f.oneOff,all:!!f.all};render()}
 function activity(){const c=ensureCur();const s=F.q.trim().toLowerCase();
 const list=[...D.txns].filter(t=>F.acct==='all'||t.accountId===F.acct||t.toAccountId===F.acct).filter(t=>F.type==='all'||t.type===F.type).filter(t=>!F.cat||(t.category||'Other')===F.cat).filter(t=>!F.month||mk(t.date)===F.month).filter(t=>!F.year||t.date.startsWith(F.year)).filter(t=>!F.oneOff||isOneOff(t)).filter(t=>F.all||cur(acct(t.accountId))===c||(t.type==='transfer'&&cur(acct(t.toAccountId))===c)).filter(t=>!s||(t.note||'').toLowerCase().includes(s)||(t.category||'').toLowerCase().includes(s)||(acct(t.accountId)?.name||'').toLowerCase().includes(s)).sort((x,y)=>y.date.localeCompare(x.date)||y.created-x.created);
-const groups=[];list.forEach(t=>{const k=mk(t.date);let g=groups.find(x=>x.k===k);if(!g){g={k,items:[],out:{},inn:{}};groups.push(g)}g.items.push(t);const c=cur(acct(t.accountId));if(t.type==='expense')g.out[c]=(g.out[c]||0)+t.amount;if(t.type==='income')g.inn[c]=(g.inn[c]||0)+t.amount});
+const FILT=(F.q||F.acct||F.type!=='all');const groups=[];list.forEach(t=>{const k=mk(t.date);let g=groups.find(x=>x.k===k);if(!g){g={k,items:[],out:{},inn:{}};groups.push(g)}g.items.push(t);const c=cur(acct(t.accountId));if(t.type==='expense')g.out[c]=(g.out[c]||0)+t.amount;if(t.type==='income')g.inn[c]=(g.inn[c]||0)+t.amount});
 const tot=(o,cls,sg)=>Object.entries(o).map(([c,v])=>`<span class="${cls}">${sg}${money(v,0,c)}</span>`).join('&nbsp;&nbsp;');
 return`${SEL?`<div class="card" style="padding:10px 14px;margin-bottom:10px;background:var(--mvS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--mv)">${SEL.length} selected${(()=>{const by={};SEL.map(id=>D.txns.find(t=>t.id===id)).filter(Boolean).forEach(t=>{const cc=cur(acct(t.accountId));by[cc]=(by[cc]||0)+t.amount});const parts=Object.entries(by).map(([cc,v])=>money(v,0,cc));return parts.length?' · '+parts.join(' · '):''})()}</span><button class="link" id="selCancel" style="font-size:12px">Cancel</button></div>
 <div class="tools" style="margin-top:8px">${SEL.length?`<button class="btn" id="selCat" style="width:auto;font-size:12px;padding:7px 12px">Change category</button><button class="btn" id="selOne" style="width:auto;font-size:12px;padding:7px 12px">Mark one-off</button><button class="btn d" id="selDel" style="width:auto;font-size:12px;padding:7px 12px;margin:0">Delete</button>`:'<span class="muted" style="font-size:12px">Tap rows to select them.</span>'}</div></div>`:''}
@@ -557,16 +557,24 @@ v.querySelector('#bkFile')?.addEventListener('click',()=>{const a=document.creat
 renderSheet()}
 
 // ---------- sheets ----------
-function closeSheet(){sheet=null;renderSheet()}
+let STACK=[],GY=null,GD=0;
+function pushSheet(){if(sheet)STACK.push(sheet)}
+function backSheet(){if(STACK.length){sheet=STACK.pop();renderSheet()}else closeSheet()}
+function closeSheet(){STACK=[];sheet=null;renderSheet()}
 function blurActive(){const a=document.activeElement;if(a&&a.blur&&a.tagName!=='BODY')a.blur()}
 (function(){const isTap=e=>{const t=e.target&&e.target.closest?e.target.closest('button,[data-c],[data-who],[data-payer],[data-ac],[data-sm],[data-t],input[type=checkbox],input[type=radio],label'):null;return t&&!(t.tagName==='INPUT'&&['text','number','search','email','password','tel','url','date'].includes((t.type||'').toLowerCase()))};
 ['pointerdown','mousedown','touchstart'].forEach(ev=>document.addEventListener(ev,e=>{if(isTap(e))blurActive()},true));
 document.addEventListener('change',e=>{const t=e.target;if(t&&(t.type==='checkbox'||t.type==='radio'))blurActive()},true)})();
 function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';return}
 const prevBox=el.querySelector('.sheet');const prevTop=prevBox?prevBox.scrollTop:null;const af=document.activeElement;const textish=af&&af.tagName==='INPUT'&&!['checkbox','radio','date','button','submit'].includes((af.type||'').toLowerCase());const afId=(textish&&af.id)?af.id:null;const afPos=(textish&&af.selectionStart!=null)?af.selectionStart:null;
-el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip"></div><div class="head"><b>${sheet.title}</b><button id="cancel">Cancel</button></div>${sheet.body()}</div></div>`;
-document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')closeSheet()};
-document.getElementById('cancel').onclick=closeSheet;sheet.wire();
+el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip"></div><div class="head">${STACK.length?`<button id="backb" style="background:none;border:0;color:var(--mv);font:inherit;font-size:15px;padding:0 10px 0 0;width:auto">‹ Back</button>`:''}<b>${sheet.title}</b><button id="cancel">${STACK.length?'Close':'Cancel'}</button></div>${sheet.body()}</div></div>`;
+document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')backSheet()};
+document.getElementById('cancel').onclick=closeSheet;
+document.getElementById('backb')&&(document.getElementById('backb').onclick=backSheet);
+document.getElementById('ov').addEventListener('touchstart',e=>{const bx=el.querySelector('.sheet');if(!bx||bx.scrollTop>0)return;GY=e.touches[0].clientY;GD=0},{passive:true});
+document.getElementById('ov').addEventListener('touchmove',e=>{if(GY==null)return;GD=e.touches[0].clientY-GY;const bx=el.querySelector('.sheet');if(GD>0&&bx)bx.style.transform='translateY('+Math.min(GD,160)+'px)'},{passive:true});
+document.getElementById('ov').addEventListener('touchend',()=>{const bx=el.querySelector('.sheet');if(bx)bx.style.transform='';if(GD>90)backSheet();GY=null;GD=0},{passive:true});
+sheet.wire();
 
 (function(){const cc=(typeof sheet.cur==='function'?sheet.cur():null)||(el.querySelector('[data-formcur]')?el.querySelector('[data-formcur]').dataset.formcur:null)||(typeof R!=='undefined'?R.cur:'USD');
 el.querySelectorAll('input.num[inputmode]').forEach(inp=>{const c=inp.dataset.cur||cc;
@@ -1936,7 +1944,7 @@ function openSettings(){sheet={title:'Settings',body(){
 const rows=[['appearance','Appearance','Theme, accent, bank logos'],['tax','Income tax slab',D.settings.slab?D.settings.slab+'% · '+(D.settings.afterTax?'after-tax shown':'gross shown'):'Not set'],['cats','Categories','Add, rename, reorder, flexibility'],['rate','Exchange rate','₹'+fxRate()+' per $'],['cards','Cards','How each card is treated'],['pin','PIN lock',D.settings.pinHash?'On':'Off'],['cloud','Cloud backup',cfgGet()?(syncMeta().at?'Last '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'Signed out'):'Not set up'],['backup','Backup file','Copy, paste, save as file']];
 return`<div class="card">${rows.map(([k,t,sub])=>`<div class="row" data-set="${k}"><div class="main"><div class="t" style="font-size:15px">${t}</div><div class="s">${sub}</div></div><div class="amt muted">›</div></div>`).join('')}</div>
 <div class="muted" style="font-size:11px;margin-top:12px;text-align:center">Ledger ${VERSION}</div>`},
-wire(){document.querySelectorAll('[data-set]').forEach(el=>el.onclick=()=>{const k=el.dataset.set;
+wire(){document.querySelectorAll('[data-set]').forEach(el=>el.onclick=()=>{const k=el.dataset.set;pushSheet();
 if(k==='appearance')openAppearance();else if(k==='tax')openTax();else if(k==='cats')openCats('expense');else if(k==='rate')openRateSheet();
 else if(k==='cards')openCardModes();else if(k==='pin')openPin();
 else if(k==='cloud')openCloud();else if(k==='backup')openBackup()});
@@ -1944,7 +1952,7 @@ document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderShee
 function openMenu(){
 const items=[['settings','Settings','Appearance, categories, rate, cards, PIN'],['wealth',D.settings.wTarget?'Wealth target':'Set a wealth target','When you reach an amount, and where to cut'],['goals',D.goals.length?'Savings goals':'Create savings goal','Monthly amount, skips, projections'],['budget','Expected spending','Per-category monthly amounts'],['invest','Investments','Gold, funds, bonds — value and profit'],['loans','Loans','Outstanding, daily interest, payoff'],['groups','People & groups','Who you split bills with'],['recurring','Recurring','Rent, subscriptions, monthly transfers']];
 sheet={title:'Menu',body(){return`<div class="card menu">${items.map(([k,t,d])=>`<div class="row" data-mi="${k}"><div class="main"><div class="t">${t}</div><div class="s">${d}</div></div><span class="muted">›</span></div>`).join('')}</div><div class="muted" style="text-align:center;margin-top:14px;font-size:12px">Ledger v${VERSION}</div>`},
-wire(){document.querySelectorAll('[data-mi]').forEach(el=>el.onclick=()=>{const k=el.dataset.mi;sheet=null;
+wire(){document.querySelectorAll('[data-mi]').forEach(el=>el.onclick=()=>{const k=el.dataset.mi;pushSheet();
 if(k==='settings')openSettings();else if(k==='wealth')openWealth();else if(k==='goals'){tab='goals';render();window.scrollTo(0,0)}else if(k==='budget'){if(tab!=='reports'){tab='reports';render()}openBudget()}else if(k==='groups')openGroups(ensureCur());else if(k==='invest')openInvest();else if(k==='loans')openLoans();else if(k==='recurring')openRecurring();else if(k==='cats')openCats('expense');else if(k==='rate')openRateSheet();else if(k==='look')openAppearance();else if(k==='pin')openPin();else if(k==='cloud')openCloud();else if(k==='backup')openBackup()})}};renderSheet()}
 function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.theme||'auto';return`<div class="field"><div>Theme</div><div class="seg" style="margin:0">${[['auto','Match phone'],['light','Light'],['dark','Dark']].map(([v,l])=>`<button data-th="${v}" class="${t===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="field"><div>Accent color</div><div class="sw">${ACCENTS.map(([c,n])=>`<button data-ac="${c}" title="${n}" class="${(D.settings.accent||'#2F4BC9')===c?'on':''}" style="background:${c}"></button>`).join('')}</div></div>
