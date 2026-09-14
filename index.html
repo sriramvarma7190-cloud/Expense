@@ -103,6 +103,7 @@ select{-webkit-appearance:none;appearance:none;background-image:url("data:image/
 .note.out{background:var(--outS)!important;color:var(--noteOut)!important;border-color:var(--outBd)}
 .note b,.note .num,.note .link{color:inherit}
 .overlay{position:fixed;inset:0;background:rgba(24,34,48,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet.tall{min-height:92vh}
 .sheet{background:var(--sf);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:16px 20px calc(24px + env(safe-area-inset-bottom))}
 .sheet .grip{width:36px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 14px}
 .sheet .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
@@ -184,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='11.4 · Sep 13 2026';
+const KEY='ledger-v1';const VERSION='11.5 · Sep 13 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -567,7 +568,7 @@ function blurActive(){const a=document.activeElement;if(a&&a.blur&&a.tagName!=='
 document.addEventListener('change',e=>{const t=e.target;if(t&&(t.type==='checkbox'||t.type==='radio'))blurActive()},true)})();
 function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';return}
 const prevBox=el.querySelector('.sheet');const prevTop=prevBox?prevBox.scrollTop:null;const af=document.activeElement;const textish=af&&af.tagName==='INPUT'&&!['checkbox','radio','date','button','submit'].includes((af.type||'').toLowerCase());const afId=(textish&&af.id)?af.id:null;const afPos=(textish&&af.selectionStart!=null)?af.selectionStart:null;
-el.innerHTML=`<div class="overlay" id="ov"><div class="sheet"><div class="grip"></div><div class="head">${STACK.length?`<button id="backb" style="background:none;border:0;color:var(--mv);font:inherit;font-size:15px;padding:0 10px 0 0;width:auto">‹ Back</button>`:''}<b>${sheet.title}</b><button id="cancel">${STACK.length?'Close':'Cancel'}</button></div>${sheet.body()}</div></div>`;
+el.innerHTML=`<div class="overlay" id="ov"><div class="sheet${sheet.tall?' tall':''}"><div class="grip"></div><div class="head">${STACK.length?`<button id="backb" style="background:none;border:0;color:var(--mv);font:inherit;font-size:15px;padding:0 10px 0 0;width:auto">‹ Back</button>`:''}<b>${sheet.title}</b><button id="cancel">${STACK.length?'Close':'Cancel'}</button></div>${sheet.body()}</div></div>`;
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')backSheet()};
 document.getElementById('cancel').onclick=closeSheet;
 document.getElementById('backb')&&(document.getElementById('backb').onclick=backSheet);
@@ -771,11 +772,12 @@ return`<div class="field"><div>${label}</div><div class="chips" style="margin-to
 
 let FOCUSED=0;
 function openTxn(edit,preset,onSaved){const curOfForm=()=>{const a=acct(st&&st.accountId);return a?cur(a):R.cur};if(!D.accounts.length)return openAccount();if(!edit&&preset)edit=null;const P=preset||{};
-const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,payer:edit?.payer||'',oneOff:!!edit?.oneOff,more:!!(edit&&(edit.note||edit.oneOff||(edit.who&&edit.who.length))),split:!!(edit?.who&&edit.who.length)||!!P.split,who:edit?.who?[...edit.who]:(P.who?[...P.who]:[]),mode:edit?.smode||'even',amt:edit?.amt?{...edit.amt}:{},pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||D.accounts[0].id,toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
+const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,payer:edit?.payer||'',isplit:!!(edit&&edit.isplit),imode:(edit&&edit.imode)||(localStorage.getItem('ledger-imode')||'pct'),ito:(edit&&edit.ito)?edit.ito.slice():JSON.parse(localStorage.getItem('ledger-ito')||'[]'),oneOff:!!edit?.oneOff,more:!!(edit&&(edit.note||edit.oneOff||(edit.who&&edit.who.length))),split:!!(edit?.who&&edit.who.length)||!!P.split,who:edit?.who?[...edit.who]:(P.who?[...P.who]:[]),mode:edit?.smode||'even',amt:edit?.amt?{...edit.amt}:{},pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||D.accounts[0].id,toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
 const fx=()=>st.type==='transfer'&&st.toAccountId&&cur(acct(st.accountId))!==cur(acct(st.toAccountId));
-const valid=()=>{const a=parseFloat(st.amount);if(!(a>0)||!st.accountId)return false;if(st.type==='invest'){const inv=acct(st.toAccountId);return !!inv&&(!usesUnits(inv)||parseFloat(st.units)>0)}return st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId&&(!fx()||parseFloat(st.toAmount)>0))};
+const valid=()=>{const a=parseFloat(st.amount);if(!(a>0)||!st.accountId)return false;
+if(st.type==='invest'){const inv=acct(st.toAccountId);return !!inv&&(!usesUnits(inv)||parseFloat(st.units)>0)}return st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId&&(!fx()||parseFloat(st.toAmount)>0))};
 const opts=sel=>D.accounts.map(a=>`<option value="${a.id}"${sel===a.id?' selected':''}>${esc(a.name)}${a.bank?` (${esc(a.bank)})`:''} · ${cur(a)}</option>`).join('');
-sheet={title:edit?'Edit transaction':'New transaction',body(){const cls=st.type==='expense'?'out':st.type==='income'?'in':'mv';const fc=cur(acct(st.accountId)),tc=cur(acct(st.toAccountId));const cats=catsOf(st.type==='income'?'income':'expense',fc);const a=parseFloat(st.amount)||0;const ta=parseFloat(st.toAmount)||0;
+sheet={title:edit?'Edit transaction':'New transaction',tall:true,body(){const cls=st.type==='expense'?'out':st.type==='income'?'in':'mv';const fc=cur(acct(st.accountId)),tc=cur(acct(st.toAccountId));const cats=catsOf(st.type==='income'?'income':'expense',fc);const a=parseFloat(st.amount)||0;const ta=parseFloat(st.toAmount)||0;
 return`<div class="seg" style="grid-template-columns:repeat(${D.accounts.some(isInvest)?4:3},1fr)">${[['expense','Expense','out'],['income','Income','in'],['transfer','Transfer','mv']].concat(D.accounts.some(isInvest)?[['invest','Invest','mv']]:[]).map(([v,l,c])=>`<button data-t="${v}" class="${st.type===v?'on '+c:''}">${l}</button>`).join('')}</div>
 <div class="amtrow" data-formcur="${fc}"><span class="${cls}">${CUR[fc].sym}</span><input id="am" class="num ${cls}" inputmode="decimal" value="${esc(st.amount)}" placeholder="0.00"></div>
 ${st.type==='invest'?(()=>{const iv=D.accounts.filter(a=>isInvest(a)&&cur(a)===fc);const inv=acct(st.toAccountId);const amt=parseFloat(st.amount)||0;const u=parseFloat(st.units)||0;
@@ -800,7 +802,22 @@ ${fx()?`<label class="field"><div>Amount received in ${tc} (${CUR[tc].sym}) — 
 `:''}</div>`
 :`<div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')} and lands in ${esc(acct(st.toAccountId)?.name||'…')}. Net worth stays the same.</div>`}${st.type==='transfer'&&st.pending?'<div class="note out" >Debited now; the receiving account is credited once you mark it received.</div>':''}`
 :st.type==='invest'?'':`${st.type!=='expense'||!st.payer?acctField(st.type==='expense'?'Paid from':'Deposited to','fr',st.accountId,st.type):''}
-<button type="button" class="link" id="moreT" style="display:block;margin:2px 0 12px;font-size:13px">${st.more?"Fewer details":"More details"} › <span class="muted" style="font-size:11px">split, one-off, date, note</span></button><div id="moreBox" style="display:${st.more?"block":"none"}">${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=parseFloat(st.amount)||0;
+<button type="button" class="link" id="moreT" style="display:block;margin:2px 0 12px;font-size:13px">${st.more?"Fewer details":"More details"} › <span class="muted" style="font-size:11px">${st.type==='transfer'||st.type==='invest'?'date, note':'split, one-off, date, note'}</span></button><div id="moreBox" style="display:${st.more?"block":"none"}">${st.type==='income'?(()=>{const amt=parseFloat(String(st.amount).replace(/[^0-9.]/g,''))||0;
+const rows=(st.ito||[]).filter(r=>!!r);
+const calc=()=>{if(!rows.length)return[];
+if(st.imode==='even'){const n=rows.filter(r=>acct(r.id)).length;const per=n?amt/(n+1):0;return rows.map(r=>({...r,v:acct(r.id)?per:0}))}
+if(st.imode==='pct')return rows.map(r=>({...r,v:amt*(parseFloat(r.pct)||0)/100}));
+return rows.map(r=>({...r,v:parseFloat(String(r.amt||'').replace(/[^0-9.]/g,''))||0}))};
+const cs=calc();const away=cs.reduce((a,b)=>a+b.v,0);const mine=amt-away;
+return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${st.isplit?'8px':'12px'}"><input type="checkbox" id="isp" style="width:auto;margin-top:3px"${st.isplit?' checked':''}><span style="font-size:14px;line-height:1.4">Goes to more than one account<br><span class="muted" style="font-size:11px">Salary paid into two or more of your accounts.</span></span></label>
+${st.isplit?`<div class="card" style="padding:12px 14px;margin-bottom:12px">
+<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0 0 10px">${[['even','Evenly'],['pct','Percentage'],['amt','Custom']].map(([v,l])=>`<button type="button" data-im="${v}" class="${st.imode===v?'on':''}">${l}</button>`).join('')}</div>
+${rows.map((r,i)=>`<div class="g2" style="align-items:end;margin-bottom:8px"><div class="field" style="margin:0"><div>Also into</div><button type="button" class="btn" data-ipick="${i}" style="text-align:left;font-size:14px;padding:9px 12px">${esc(acct(r.id)?.name||'Pick an account')} ›</button></div>
+${st.imode==='pct'?`<label class="field" style="margin:0"><div>Share (%)</div><input class="num" data-ipct="${i}" inputmode="decimal" value="${esc(r.pct||'')}" placeholder="20"></label>`:st.imode==='amt'?`<label class="field" style="margin:0"><div>Amount (${CUR[fc].sym})</div><input class="num" data-iamt="${i}" inputmode="decimal" value="${esc(r.amt||'')}" placeholder="600"></label>`:`<div class="field" style="margin:0"><div>Share</div><div class="num" style="padding:11px 0">${money(cs[i]?cs[i].v:0,0,fc)}</div></div>`}
+<button type="button" class="link" data-irm="${i}" style="font-size:12px;grid-column:1/-1;text-align:left;color:var(--out)">Remove</button></div>`).join('')}
+<button type="button" class="btn" id="iadd" style="margin-bottom:8px">Add another account</button>
+${amt>0?`<div class="note ${Math.abs(mine)<0.005||mine>0?'mv':'out'}">${esc(acct(st.accountId)?.name||'Main account')} ${money(mine,0,fc)}${cs.map(r=>` · ${esc(acct(r.id)?.name||'')} ${money(r.v,0,fc)}`).join('')}${mine<-0.005?` — that is ${money(-mine,0,fc)} more than the total`:''}</div>`:''}
+</div>`:''}`})():''}${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=parseFloat(st.amount)||0;
 const sel=(st.who||[]).filter(id=>acct(id));const mode=st.mode||'even';
 const shares={};if(sel.length){if(mode==='even'){const each=Math.floor(amt/(sel.length+1)*100)/100;sel.forEach(id=>shares[id]=each)}
 else if(mode==='all'){const each=Math.floor(amt/sel.length*100)/100;sel.forEach(id=>shares[id]=each)}
@@ -830,9 +847,21 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><
 :`<label class="field"><div>Date</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Where, what, who"></label>`}
 <button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
+
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';renderSheet()});
 $('am').oninput=e=>{if(st.type==='transfer'&&(isPerson(acct(st.accountId))||isPerson(acct(st.toAccountId))))setTimeout(()=>{const n=document.getElementById('am');const v=n?n.value:'';st.amount=String(v).replace(/[^0-9.]/g,'');renderSheet()},400);st.amount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.amount;re()};$('am').onkeydown=e=>{if(e.key==='Enter')$('ok').click()};
 $('fr')&&($('fr').onchange=e=>{st.accountId=e.target.value;renderSheet()});
+$('isp')&&($('isp').onchange=e=>{pullSh();st.isplit=e.target.checked;if(st.isplit&&!(st.ito||[]).length)st.ito=[{id:'',pct:'',amt:''}];renderSheet()});
+document.querySelectorAll('[data-im]').forEach(b=>b.onclick=()=>{pullSh();st.imode=b.dataset.im;localStorage.setItem('ledger-imode',st.imode);renderSheet()});
+document.querySelectorAll('[data-ipct]').forEach(el=>el.oninput=e=>{const i=+el.dataset.ipct;st.ito[i].pct=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._ipt);window._ipt=setTimeout(()=>renderSheet(),500)});
+document.querySelectorAll('[data-iamt]').forEach(el=>el.oninput=e=>{const i=+el.dataset.iamt;st.ito[i].amt=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._iat);window._iat=setTimeout(()=>renderSheet(),500)});
+document.querySelectorAll('[data-irm]').forEach(b=>b.onclick=()=>{pullSh();st.ito.splice(+b.dataset.irm,1);if(!st.ito.length)st.isplit=false;renderSheet()});
+$('iadd')&&($('iadd').onclick=()=>{pullSh();st.ito.push({id:'',pct:'',amt:''});renderSheet()});
+document.querySelectorAll('[data-ipick]').forEach(b=>b.onclick=()=>{const i=+b.dataset.ipick;pullSh();const back=sheet;
+openAcctPicker({noRecent:true,hidePeople:true,title:'Also deposited to',current:st.ito[i].id||null,type:'income',
+filter:a=>!isPerson(a)&&!isLoan(a)&&cur(a)===curOfForm()&&a.id!==st.accountId,
+onCancel:()=>{sheet=back;renderSheet()},
+onPick:id=>{st.ito[i].id=id;sheet=back;renderSheet()}})});
 document.querySelectorAll('[data-payer]').forEach(b=>b.onclick=()=>{st.payer=b.dataset.payer;renderSheet()});
 document.querySelectorAll('[data-payermore]').forEach(b=>b.onclick=()=>{const back=sheet;
 openAcctPicker({title:'Who paid?',withPeople:true,current:st.payer,type:'payer',curHint:curOfForm(),
@@ -870,6 +899,19 @@ $('editCats')&&($('editCats').onclick=()=>openCats(st.type==='income'?'income':'
 $('dt').onchange=e=>{st.date=e.target.value;if($('rd')&&!st.pending&&(!st.recvDate||st.recvDate<st.date)){st.recvDate=st.date;$('rd').value=st.date}};$('nt').oninput=e=>st.note=e.target.value;
 $('rd')&&($('rd').onchange=e=>st.recvDate=e.target.value);$('pend')&&($('pend').onchange=e=>{st.pending=e.target.checked;if(!st.pending&&!st.recvDate)st.recvDate=today();renderSheet()});
 $('ok').onclick=()=>{if(!valid())return;
+if(st.type==='income'&&st.isplit){const amt=Math.round((parseFloat(String(st.amount).replace(/[^0-9.]/g,''))||0)*100)/100;const rows=(st.ito||[]).filter(r=>r&&acct(r.id));
+if(rows.length){const total=Math.round(amt*100)/100;const gid=uid();
+let cs;if(st.imode==='even'){const per=Math.round((total/(rows.length+1))*100)/100;cs=rows.map(r=>({id:r.id,v:per}))}
+else if(st.imode==='pct')cs=rows.map(r=>({id:r.id,v:Math.round(total*(parseFloat(r.pct)||0))/100}));
+else cs=rows.map(r=>({id:r.id,v:Math.round((parseFloat(String(r.amt||'').replace(/[^0-9.]/g,''))||0)*100)/100}));
+const away=cs.reduce((a,b)=>a+b.v,0);const mine=Math.round((total-away)*100)/100;
+if(mine<-0.005){toast('That is more than the total');return}
+if(edit)D.txns=D.txns.filter(x=>x.id!==edit.id&&!(edit.gid&&x.gid===edit.gid));
+const meta={category:st.category,note:st.note.trim(),oneOff:st.oneOff||undefined,isplit:true,imode:st.imode,gid};
+if(mine>0.005)D.txns.push({id:uid(),created:Date.now(),type:'income',amount:mine,date:st.date,accountId:st.accountId,...meta});
+cs.forEach(r=>{if(r.v>0.005)D.txns.push({id:uid(),created:Date.now(),type:'income',amount:r.v,date:st.date,accountId:r.id,...meta})});
+localStorage.setItem('ledger-imode',st.imode);localStorage.setItem('ledger-ito',JSON.stringify(rows.map(r=>({id:r.id,pct:r.pct||'',amt:r.amt||''}))));
+save();closeSheet();render();toast(edit?'Saved':'Added');if(onSaved)onSaved();return}}
 if(st.type==='invest'){const inv=acct(st.toAccountId);const amt=Math.round(parseFloat(st.amount)*100)/100;const u=usesUnits(inv)?Math.round(parseFloat(st.units)*1000)/1000:undefined;
 const t={id:edit?.id||uid(),created:edit?.created||Date.now(),type:'transfer',amount:amt,date:st.date,recvDate:st.date,accountId:st.sell?st.toAccountId:st.accountId,toAccountId:st.sell?st.accountId:st.toAccountId,units:u,purity:inv.kind==='gold'?st.purity:undefined,sell:st.sell||undefined,note:st.note.trim()||((st.sell?'Sold ':'Bought ')+(u?u+' '+unitLabel(inv)+' ':'')+inv.name)};
 if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);sheet=null;if(onSaved)onSaved(t);save();toast(st.sell?'Sale recorded':'Investment recorded');return}
