@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='12.9 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='13.0 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -814,7 +814,7 @@ edit=Object.assign({},main,{amount:total,_grp:grp.map(x=>x.id),_ito:others,_imod
 if(edit&&!edit.isplit&&edit.gid&&edit.type!=='income'){const grp=D.txns.filter(x=>x.gid===edit.gid);
 const mine=grp.find(x=>x.type==='expense');const shares=grp.filter(x=>x.type==='transfer'&&x.toAccountId);
 if(shares.length){const total=grp.reduce((a,b)=>a+b.amount,0);
-const base=mine||{type:'expense',amount:0,date:shares[0].date,accountId:shares[0].accountId,category:shares[0].category,note:shares[0].note||'',id:shares[0].id};
+const base=mine||{type:'expense',amount:0,date:shares[0].date,accountId:shares[0].accountId,category:shares[0].category,note:shares[0].note||'',id:shares[0].id,gid:edit.gid,payer:shares[0].payer};
 edit=Object.assign({},base,{type:'expense',amount:total,_bsplit:true,_who:shares.map(x=>x.toAccountId),_shares:Object.fromEntries(shares.map(x=>[x.toAccountId,String(x.amount)])),_grp:grp.map(x=>x.id),_noMine:!mine});}}const curOfForm=()=>{const a=acct(st&&st.accountId);return a?cur(a):R.cur};if(!D.accounts.length)return openAccount();if(!edit&&preset)edit=null;const P=preset||{};
 const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,payer:edit?.payer||'',isplit:!!(edit&&edit.isplit),imode:(edit&&(edit._imode||edit.imode))||(localStorage.getItem('ledger-imode')||'pct'),ito:(edit&&edit._ito)?edit._ito.slice():((edit&&edit.ito)?edit.ito.slice():JSON.parse(localStorage.getItem('ledger-ito')||'[]')),oneOff:!!edit?.oneOff,more:!!(edit&&(edit.note||edit.oneOff||(edit.who&&edit.who.length))),split:!!(edit?.who&&edit.who.length)||!!(edit&&edit._bsplit)||!!P.split,who:edit?._who?[...edit._who]:(edit?.who?[...edit.who]:(P.who?[...P.who]:[])),mode:edit?._noMine?'all':(edit?._shares?'amt':(edit?.smode||'even')),amt:edit?._shares?{...edit._shares}:(edit?.amt?{...edit.amt}:{}),pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||(()=>{const t0=edit?.type||P.type||'expense';const r=recentAccts(t0).find(id=>D.accounts.some(a=>a.id===id&&!isLoan(a)&&(t0==='transfer'||!isPerson(a))));return r||D.accounts[0].id})(),toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
 const fx=()=>st.type==='transfer'&&st.toAccountId&&cur(acct(st.accountId))!==cur(acct(st.toAccountId));
