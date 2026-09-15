@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='13.0 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='13.1 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -482,11 +482,15 @@ function activity(){const c=ensureCur();const s=F.q.trim().toLowerCase();
 let list=[...D.txns].filter(t=>F.acct==='all'||t.accountId===F.acct||t.toAccountId===F.acct).filter(t=>F.type==='all'||t.type===F.type).filter(t=>!F.cat||(t.category||'Other')===F.cat).filter(t=>!F.month||mk(t.date)===F.month).filter(t=>!F.year||t.date.startsWith(F.year)).filter(t=>!F.oneOff||isOneOff(t)).filter(t=>F.all||cur(acct(t.accountId))===c||(t.type==='transfer'&&cur(acct(t.toAccountId))===c)).filter(t=>!s||(t.note||'').toLowerCase().includes(s)||(t.category||'').toLowerCase().includes(s)||(acct(t.accountId)?.name||'').toLowerCase().includes(s)).sort((x,y)=>y.date.localeCompare(x.date)||y.created-x.created);
 const FILT=(F.q||F.acct||F.type!=='all');
 SPLITALL=(!F.acct||F.acct==='all');
+const listAll=list.slice();
 if(SPLITALL){const seen={};list=list.filter(t=>{if(!t.gid)return true;if(t.isplit){if(seen[t.gid])return false;seen[t.gid]=1;return true}
 if(t.type==='expense')return true;
 if(D.txns.some(x=>x.gid===t.gid&&x.type==='expense'))return false;
 if(seen['t'+t.gid])return false;seen['t'+t.gid]=1;return true})}
-const groups=[];list.forEach(t=>{const k=mk(t.date);let g=groups.find(x=>x.k===k);if(!g){g={k,items:[],out:{},inn:{}};groups.push(g)}g.items.push(t);const c=cur(acct(t.accountId));if(t.type==='expense')g.out[c]=(g.out[c]||0)+t.amount;if(t.type==='income')g.inn[c]=(g.inn[c]||0)+t.amount});
+const groups=[];list.forEach(t=>{const k=mk(t.date);let g=groups.find(x=>x.k===k);if(!g){g={k,items:[],out:{},inn:{}};groups.push(g)}g.items.push(t)});
+// header totals come from every entry of that month, before collapsing, and skip anything not yet due
+listAll.forEach(t=>{if(!posted(t))return;const k=mk(t.date);const g=groups.find(x=>x.k===k);if(!g)return;const c=cur(acct(t.accountId));
+if(t.type==='expense')g.out[c]=(g.out[c]||0)+t.amount;if(t.type==='income')g.inn[c]=(g.inn[c]||0)+t.amount});
 const tot=(o,cls,sg)=>Object.entries(o).map(([c,v])=>`<span class="${cls}">${sg}${money(v,0,c)}</span>`).join('&nbsp;&nbsp;');
 return`${SEL?`<div class="card" style="padding:10px 14px;margin-bottom:10px;background:var(--mvS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--mv)">${SEL.length} selected${(()=>{const by={};SEL.map(id=>D.txns.find(t=>t.id===id)).filter(Boolean).forEach(t=>{const cc=cur(acct(t.accountId));by[cc]=(by[cc]||0)+t.amount});const parts=Object.entries(by).map(([cc,v])=>money(v,0,cc));return parts.length?' · '+parts.join(' · '):''})()}</span><button class="link" id="selCancel" style="font-size:12px">Cancel</button></div>
 <div class="tools" style="margin-top:8px">${SEL.length?`<button class="btn" id="selCat" style="width:auto;font-size:12px;padding:7px 12px">Change category</button><button class="btn" id="selOne" style="width:auto;font-size:12px;padding:7px 12px">Mark one-off</button><button class="btn d" id="selDel" style="width:auto;font-size:12px;padding:7px 12px;margin:0">Delete</button>`:'<span class="muted" style="font-size:12px">Tap rows to select them.</span>'}</div></div>`:''}
