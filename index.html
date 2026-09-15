@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='12.4 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='12.5 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -875,9 +875,19 @@ ${(mode==='custom'||mode==='pct')?sel.map(id=>{const a=acct(id);return`<div styl
 <div style="display:flex;align-items:center;gap:10px;padding:8px 0 4px;border-top:1px solid var(--line);margin-top:4px"><span style="flex:1;font-size:14px">Your share</span><b class="num" style="font-size:14px">${money(mine,0,fc)}</b></div>
 <div class="note ${over?'out':'mv'}" style="background:var(--${over?'outS':'mvS'});margin:6px 0 0">${over?`Shares add up to ${money(owed,0,fc)} — more than the ${money(amt,0,fc)} bill.`:`${money(amt,0,fc)} bill · ${money(owed,0,fc)} owed to you · ${money(mine,0,fc)} yours`}</div>`
 :'<div class="muted" style="font-size:13px">Tap the people who were in on this bill — then choose how to split it.</div>'}</div>`:''}`})():''}
-${st.type==='expense'||st.type==='income'?(()=>{const amt=nv(st.amount)||0;const catOn=st.category&&oneOffCats().includes(st.category);
+${st.type==='expense'||st.type==='income'?(()=>{const full=nv(st.amount)||0;
+// compare what the split actually leaves as yours
+const amt=(()=>{if(st.type!=='expense'||!st.split)return full;
+const sel2=(st.who||[]).filter(id=>acct(id));if(!sel2.length)return full;
+const m2=st.mode||'even';
+if(m2==='all')return 0;
+if(m2==='even'){const n2=sel2.length+1;const base=Math.floor(full*100/n2);return base/100}
+if(m2==='pct'){const ps=pctShares(full,sel2,id=>st.pct?.[id]);return Math.max(0,Math.round((full-sel2.reduce((x,id)=>x+(ps[id]||0),0))*100)/100)}
+return Math.max(0,Math.round((full-sel2.reduce((x,id)=>x+(+(st.amt?.[id]||0)),0))*100)/100)})();
+const catOn=st.category&&oneOffCats().includes(st.category);
 const hist=D.txns.filter(t=>t.type===st.type&&t.category===st.category&&cur(acct(t.accountId))===fc&&t.id!==edit?.id).map(t=>t.amount);
 const avg=hist.length?hist.reduce((a,b)=>a+b,0)/hist.length:0;const big=avg>0&&amt>avg*3;
+if(st.type==='expense'&&st.split&&(st.who||[]).filter(id=>acct(id)).length&&amt<=0.005)return'';
 return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${big&&!st.oneOff&&!catOn?'6px':'12px'}"><input type="checkbox" id="oneoff" style="width:auto;margin-top:3px"${st.oneOff||catOn?' checked':''}${catOn?' disabled':''}><span style="font-size:14px;line-height:1.4">One-off — keep it out of my averages<br><span class="muted" style="font-size:11px">${catOn?`"${esc(st.category)}" is marked one-off for every entry.`:'Still counts in your balances and reports; only excluded from the monthly average used to project your wealth target.'}</span></span></label>
 ${big&&!st.oneOff&&!catOn?`<div class="note mv" style="margin-bottom:12px">This is ${(amt/avg).toFixed(1)}× your usual ${esc(st.category)} of ${money(avg,0,fc)}. Was it a one-off? <button type="button" id="ooYes" class="link" style="font-size:13px">Yes, mark it</button></div>`:''}`})():''}
 <div class="field"><div style="display:flex;justify-content:space-between"><span>Category</span><button class="link" id="editCats" style="font-size:12px">Edit list</button></div><div class="chips">${cats.map(c=>`<button data-c="${esc(c)}" class="${st.category===c?'on':''}" style="${st.category===c?`background:var(--${cls});border-color:var(--${cls})`:''}">${esc(c)}</button>`).join('')}</div></div>`}
