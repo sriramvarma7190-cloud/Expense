@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='13.3 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='13.4 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1299,7 +1299,9 @@ wire(){document.querySelectorAll('[data-rid]').forEach(el=>el.onclick=()=>openRe
 function openRecurringEdit(edit){const st={name:edit?.name||'',type:edit?.type||'expense',amount:edit?String(edit.amount):'',day:edit?.day||1,every:edit?.every||'month',startDate:edit?.startDate||today(),rsplit:!!edit?.who,rwho:edit?.who?[...edit.who]:[],isplit:!!(edit&&edit.ito&&edit.ito.length),ito:(edit&&edit.ito)?edit.ito.map(x=>({...x})):[],imode:(edit&&edit.imode)||'even',rflex:edit?.flex||'',accountId:edit?.accountId||D.accounts[0]?.id,toAccountId:edit?.toAccountId||'',category:edit?.category||'',note:edit?.note||'',active:edit?edit.active!==false:true};
 const opts=sel=>D.accounts.map(a=>`<option value="${a.id}"${sel===a.id?' selected':''}>${esc(a.name)} · ${cur(a)}</option>`).join('');
 const valid=()=>st.name.trim()&&nv(st.amount)>0&&st.accountId&&(st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId));
-sheet={title:edit?'Edit recurring':'New recurring',body(){const c=cur(acct(st.accountId));return`<label class="field"><div>Name</div><input id="rn" value="${esc(st.name)}" placeholder="Rent, subscription, monthly transfer"></label>
+sheet={title:edit?'Edit recurring':'New recurring',body(){const c=cur(acct(st.accountId));
+const FLEXBLOCK=()=>`<div class="field"><div>How flexible is this?</div><div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${Object.entries(FLEX).map(([fk,fv])=>`<button data-rfx="${fk}" class="${(st.rflex||recFlexDefault({name:st.name,toAccountId:st.toAccountId}))===fk?'on':''}" style="font-size:12px">${fv.label}</button>`).join('')}</div><div class="muted" style="font-size:11px;margin-top:6px">${(st.rflex||recFlexDefault({name:st.name,toAccountId:st.toAccountId}))==='fixed'?"Never suggested as a cut — a loan EMI or a tool you rely on.":"Counted as something you could stop if you needed to."}</div></div>`;
+return`<label class="field"><div>Name</div><input id="rn" value="${esc(st.name)}" placeholder="Rent, subscription, monthly transfer"></label>
 <div class="seg">${[['expense','Expense','out'],['income','Income','in'],['transfer','Transfer','mv']].map(([v,l,cc])=>`<button data-t="${v}" class="${st.type===v?'on '+cc:''}">${l}</button>`).join('')}</div>
 <div class="g2"><label class="field"><div>Amount (${CUR[c].sym})</div><input id="ra" class="num" inputmode="decimal" value="${esc(st.amount)}" placeholder="0.00"></label>${st.every==='month'?`<label class="field"><div>Day of month</div><select id="rdy">${Array.from({length:31},(_,i)=>`<option value="${i+1}"${st.day===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label>`:`<label class="field"><div>First one on</div><input id="rsd" type="date" value="${st.startDate}"></label>`}</div>
 ${st.type==='income'?(()=>{const others=D.accounts.filter(a=>!isPerson(a)&&!isLoan(a)&&cur(a)===cur(acct(st.accountId))&&a.id!==st.accountId);
@@ -1324,7 +1326,7 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>From</div><sel
 ${st.type==='transfer'&&st.toAccountId&&cur(acct(st.toAccountId))!==c?'<div class="note mv" >Different currencies — when it comes due you\'ll enter the amount received that day.</div>':''}
 ${st.type==='expense'?`<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="rspl" style="width:auto"${st.rsplit?' checked':''}><span style="font-size:14px">Split it every month</span></label>
 ${st.rsplit?`<div class="chips" style="margin:-4px 0 12px">${peopleIn(c).map(a=>`<button type="button" data-rw="${a.id}" style="${st.rwho.includes(a.id)?'background:var(--accent);border-color:var(--accent);color:#fff':''}">${esc(pname(a))}${st.rwho.includes(a.id)?' ✓':''}</button>`).join('')||'<span class="muted" style="font-size:13px">Add people from a split bill first.</span>'}</div><div class="muted" style="font-size:12px;margin:-6px 0 12px">When it's due, the Add button opens it pre-split evenly — adjust before saving.</div>`:''}`:''}
-<div class="field"><div>How flexible is this?</div><div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${Object.entries(FLEX).map(([fk,fv])=>`<button data-rfx="${fk}" class="${(st.rflex||recFlexDefault({name:st.name,toAccountId:st.toAccountId}))===fk?'on':''}" style="font-size:12px">${fv.label}</button>`).join('')}</div><div class="muted" style="font-size:11px;margin-top:6px">${(st.rflex||recFlexDefault({name:st.name,toAccountId:st.toAccountId}))==='fixed'?"Never suggested as a cut — a loan EMI or a tool you rely on.":"Counted as something you could stop if you needed to."}</div></div>
+${st.type==='expense'?FLEXBLOCK():''}
 ${edit?`<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ract" style="width:auto"${st.active?' checked':''}><span style="font-size:14px">Active</span></label>`:''}
 <button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save':'Add recurring'}</button>${edit?'<button class="btn d" id="del">Delete recurring</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
