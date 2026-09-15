@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='13.6 · Sep 15 2026';
+const KEY='ledger-v1';const VERSION='13.7 · Sep 15 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -405,7 +405,7 @@ ${recv>0?`<div class="brow"><div class="l"><span>Received from abroad</span><spa
 ${earned>0||c==='USD'?`<div class="brow"><div class="l"><span>Earned</span><span class="num in">${money(earned,0,c)}</span></div></div>`:''}
 ${sent>0?`<div class="brow"><div class="l"><span>Sent abroad</span><span class="num mv">${money(sent,0,c)}</span></div></div>`:''}
 <div class="brow" style="background:var(--bg)"><div class="l"><span><b>Remaining</b></span><span class="num"><b style="color:${remaining>=0?'var(--in)':'var(--out)'}">${money(remaining,0,c)}</b></span></div></div></div>
-${due.length?`<div class="sec">Due<span class="r">${due.length} recurring</span></div><div class="card">${due.map(d=>`<div class="due"><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.r.name)}</div><div class="muted" style="font-size:12px">${dlabel(d.date)} · ${money(d.r.amount,0,cur(acct(d.r.accountId)))} · ${esc(acct(d.r.accountId)?.name||'')}${d.r.type==='transfer'?' → '+esc(acct(d.r.toAccountId)?.name||''):''}</div></div><button class="btn" data-skip="${d.r.id}|${d.m}" style="background:transparent;color:var(--ink2)">Skip</button><button class="btn p" data-post="${d.r.id}|${d.m}">Add</button></div>`).join('')}</div>`:''}
+${due.length?`<div class="sec">Due<span class="r">${(()=>{const late=due.filter(d=>d.date<today()).length;return late?`<b style="color:var(--out)">${late} overdue</b>`:`${due.length} recurring`})()}</span></div><div class="card">${due.map(d=>`<div class="due"><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.r.name)}</div><div class="muted" style="font-size:12px">${dlabel(d.date)}${d.date<today()?(()=>{const n=Math.round((new Date(today()+'T00:00:00')-new Date(d.date+'T00:00:00'))/86400000);return n>=2?` · ${n} days ago`:''})():''} · ${money(d.r.amount,0,cur(acct(d.r.accountId)))} · ${esc(acct(d.r.accountId)?.name||'')}${d.r.type==='transfer'?' → '+esc(acct(d.r.toAccountId)?.name||''):''}</div></div><button class="btn" data-skip="${d.r.id}|${d.m}" style="background:transparent;color:var(--ink2)">Skip</button><button class="btn p" data-post="${d.r.id}|${d.m}">Add</button></div>`).join('')}</div>`:''}
 ${(()=>{const ppl=peopleIn(c).map(a=>({a,v:owedTo(a.id)})).filter(x=>Math.abs(x.v)>0.005);if(!ppl.length)return'';
 const tot=ppl.reduce((x,y)=>x+y.v,0);
 return`<div class="sec">Owed to you<span class="r"><button class="link" id="mgGroups" style="font-size:12px">Groups</button></span></div><div class="card">
