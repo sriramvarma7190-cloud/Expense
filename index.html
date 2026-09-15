@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='12.5 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='12.6 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -218,13 +218,12 @@ const floored=raw.map(r=>({id:r.id,c:Math.floor(r.v*100)}));
 let used=floored.reduce((a,b)=>a+b.c,0);const cap=Math.round(amt*100);
 let spare=Math.min(Math.round(raw.reduce((a,b)=>a+b.v,0)*100)-used,cap-used);
 // leftover cents go to the first person listed
-for(let i=0;i<floored.length&&spare>0;i++){const take=Math.min(spare,1);floored[i].c+=take;spare-=take}
-for(let i=0;i<floored.length&&spare>0;i++){floored[i].c+=spare;spare=0}
+while(spare>0){let moved=false;for(let i=0;i<floored.length&&spare>0;i++){floored[i].c++;spare--;moved=true}if(!moved)break}
 floored.forEach(r=>out[r.id]=r.c/100);return out};
 // shares that must cover the whole amount (they owe all / evenly), remainder to the first person
 const evenShares=(amt,ids)=>{const out={};const n=ids.length;if(!n)return out;
-const base=Math.floor((amt*100)/n);let spare=Math.round(amt*100)-base*n;
-ids.forEach((id,i)=>{out[id]=(base+(i===0?spare:0))/100});return out};
+const base=Math.floor((amt*100)/n);const spare=Math.round(amt*100)-base*n;
+ids.forEach((id,i)=>{out[id]=(base+(i<spare?1:0))/100});return out};
 const nv=v=>parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''))||0;
 const numVal=el=>parseFloat(String(el&&el.value||'').replace(/[^0-9.]/g,''))||0;
 const money=(n,sign,c='USD')=>{const s=fmt(Math.abs(n),c);return sign?(n<0?'−':'+')+s:(n<0?'−':'')+s};
@@ -812,7 +811,7 @@ if(edit&&!edit.isplit&&edit.gid&&edit.type!=='income'){const grp=D.txns.filter(x
 const mine=grp.find(x=>x.type==='expense');const shares=grp.filter(x=>x.type==='transfer'&&x.toAccountId);
 if(mine&&shares.length){const total=grp.reduce((a,b)=>a+b.amount,0);
 edit=Object.assign({},mine,{amount:total,_bsplit:true,_who:shares.map(x=>x.toAccountId),_shares:Object.fromEntries(shares.map(x=>[x.toAccountId,String(x.amount)])),_grp:grp.map(x=>x.id)});}}const curOfForm=()=>{const a=acct(st&&st.accountId);return a?cur(a):R.cur};if(!D.accounts.length)return openAccount();if(!edit&&preset)edit=null;const P=preset||{};
-const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,payer:edit?.payer||'',isplit:!!(edit&&edit.isplit),imode:(edit&&(edit._imode||edit.imode))||(localStorage.getItem('ledger-imode')||'pct'),ito:(edit&&edit._ito)?edit._ito.slice():((edit&&edit.ito)?edit.ito.slice():JSON.parse(localStorage.getItem('ledger-ito')||'[]')),oneOff:!!edit?.oneOff,more:!!(edit&&(edit.note||edit.oneOff||(edit.who&&edit.who.length))),split:!!(edit?.who&&edit.who.length)||!!(edit&&edit._bsplit)||!!P.split,who:edit?._who?[...edit._who]:(edit?.who?[...edit.who]:(P.who?[...P.who]:[])),mode:edit?._shares?'amt':(edit?.smode||'even'),amt:edit?._shares?{...edit._shares}:(edit?.amt?{...edit.amt}:{}),pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||D.accounts[0].id,toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
+const st={type:edit?.type||P.type||'expense',amount:edit?String(edit.amount):(P.amount?String(P.amount):''),toAmount:edit?.toAmount!=null?String(edit.toAmount):'',date:edit?.date||P.date||today(),recvDate:edit?.recvDate||'',pending:!!edit?.pending,units:edit?.units!=null?String(edit.units):'',purity:edit?.purity||'22',sell:!!edit?.sell,payer:edit?.payer||'',isplit:!!(edit&&edit.isplit),imode:(edit&&(edit._imode||edit.imode))||(localStorage.getItem('ledger-imode')||'pct'),ito:(edit&&edit._ito)?edit._ito.slice():((edit&&edit.ito)?edit.ito.slice():JSON.parse(localStorage.getItem('ledger-ito')||'[]')),oneOff:!!edit?.oneOff,more:!!(edit&&(edit.note||edit.oneOff||(edit.who&&edit.who.length))),split:!!(edit?.who&&edit.who.length)||!!(edit&&edit._bsplit)||!!P.split,who:edit?._who?[...edit._who]:(edit?.who?[...edit.who]:(P.who?[...P.who]:[])),mode:edit?._shares?'amt':(edit?.smode||'even'),amt:edit?._shares?{...edit._shares}:(edit?.amt?{...edit.amt}:{}),pct:edit?.pct?{...edit.pct}:{},accountId:edit?.accountId||P.accountId||(()=>{const t0=edit?.type||P.type||'expense';const r=recentAccts(t0).find(id=>D.accounts.some(a=>a.id===id&&!isLoan(a)&&(t0==='transfer'||!isPerson(a))));return r||D.accounts[0].id})(),toAccountId:edit?.toAccountId||P.toAccountId||(D.accounts.find(a=>a.id!==(edit?.accountId||P.accountId||D.accounts[0].id))?.id||''),category:edit?.category||P.category||'',note:edit?.note||P.note||''};
 const fx=()=>st.type==='transfer'&&st.toAccountId&&cur(acct(st.accountId))!==cur(acct(st.toAccountId));
 const valid=()=>{const a=nv(st.amount);if(!(a>0)||!st.accountId)return false;
 if(st.type==='invest'){const inv=acct(st.toAccountId);return !!inv&&(!usesUnits(inv)||nv(st.units)>0)}return st.type!=='transfer'||(st.toAccountId&&st.toAccountId!==st.accountId&&(!fx()||nv(st.toAmount)>0))};
@@ -859,7 +858,7 @@ ${st.imode==='pct'?`<label class="field" style="margin:0"><div>Share (%)</div><i
 ${amt>0?`<div class="note ${Math.abs(mine)<0.005||mine>0?'mv':'out'}">${esc(acct(st.accountId)?.name||'Main account')} ${money(mine,0,fc)}${cs.map(r=>` · ${esc(acct(r.id)?.name||'')} ${money(r.v,0,fc)}`).join('')}${mine<-0.005?` — that is ${money(-mine,0,fc)} more than the total`:''}</div>`:''}
 </div>`:''}`})():''}${st.type==='expense'?(()=>{const people=peopleIn(fc);const amt=nv(st.amount)||0;
 const sel=(st.who||[]).filter(id=>acct(id));const mode=st.mode||'even';
-const shares={};if(sel.length){if(mode==='even'){const n=sel.length+1;const base=Math.floor(amt*100/n);let spare=Math.round(amt*100)-base*n;sel.forEach((id,i)=>{shares[id]=(base+(i===0?spare:0))/100})}
+const shares={};if(sel.length){if(mode==='even'){const n=sel.length+1;const base=Math.floor(amt*100/n);const spare=Math.round(amt*100)-base*n;sel.forEach((id,i)=>{shares[id]=(base+(i<spare?1:0))/100})}
 else if(mode==='all'){const es=evenShares(amt,sel);sel.forEach(id=>shares[id]=es[id])}
 else if(mode==='pct'){const ps=pctShares(amt,sel,id=>st.pct?.[id]);sel.forEach(id=>shares[id]=ps[id])}
 else sel.forEach(id=>shares[id]=+(st.amt?.[id]||0))}
@@ -898,7 +897,7 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><
 <button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 
-document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';renderSheet()});
+document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st.type=b.dataset.t;st.category='';const r=recentAccts(st.type).find(id=>D.accounts.some(a=>a.id===id&&!isLoan(a)&&(st.type==='transfer'||!isPerson(a))));if(r)st.accountId=r;renderSheet()});
 $('am').oninput=e=>{if(st.type==='transfer'&&(isPerson(acct(st.accountId))||isPerson(acct(st.toAccountId))))setTimeout(()=>{const n=document.getElementById('am');const v=n?n.value:'';st.amount=String(v).replace(/[^0-9.]/g,'');renderSheet()},400);st.amount=e.target.value.replace(/[^0-9.]/g,'');e.target.value=st.amount;re()};$('am').onkeydown=e=>{if(e.key==='Enter')$('ok').click()};
 $('fr')&&($('fr').onchange=e=>{st.accountId=e.target.value;renderSheet()});
 $('isp')&&($('isp').onchange=e=>{pullSh();st.isplit=e.target.checked;if(st.isplit&&!(st.ito||[]).length)st.ito=[{id:'',pct:'',amt:''}];renderSheet()});
@@ -961,12 +960,12 @@ const meta={category:st.category,note:st.note.trim(),oneOff:st.oneOff||undefined
 if(mine>0.005)D.txns.push({id:uid(),created:Date.now(),type:'income',amount:mine,date:st.date,accountId:st.accountId,...meta});
 cs.forEach(r=>{if(r.v>0.005)D.txns.push({id:uid(),created:Date.now(),type:'income',amount:r.v,date:st.date,accountId:r.id,...meta})});
 localStorage.setItem('ledger-imode',st.imode);localStorage.setItem('ledger-ito',JSON.stringify(rows.map(r=>({id:r.id,pct:r.pct||'',amt:r.amt||''}))));
-save();closeSheet();render();toast(edit?'Saved':'Added');if(onSaved)onSaved();return}}
+noteRecent(st.type,st.accountId);if(st.type==='transfer'&&st.toAccountId)noteRecent('transfer-to',st.toAccountId);save();closeSheet();render();toast(edit?'Saved':'Added');if(onSaved)onSaved();return}}
 if(st.type==='invest'){const inv=acct(st.toAccountId);const amt=Math.round(nv(st.amount)*100)/100;const u=usesUnits(inv)?Math.round(nv(st.units)*1000)/1000:undefined;
 const t={id:edit?.id||uid(),created:edit?.created||Date.now(),type:'transfer',amount:amt,date:st.date,recvDate:st.date,accountId:st.sell?st.toAccountId:st.accountId,toAccountId:st.sell?st.accountId:st.toAccountId,units:u,purity:inv.kind==='gold'?st.purity:undefined,sell:st.sell||undefined,note:st.note.trim()||((st.sell?'Sold ':'Bought ')+(u?u+' '+unitLabel(inv)+' ':'')+inv.name)};
-if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);sheet=null;if(onSaved)onSaved(t);save();toast(st.sell?'Sale recorded':'Investment recorded');return}
+if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);noteRecent(st.type,st.accountId);if(st.type==='transfer'&&st.toAccountId)noteRecent('transfer-to',st.toAccountId);sheet=null;if(onSaved)onSaved(t);save();toast(st.sell?'Sale recorded':'Investment recorded');return}
 if(st.type==='expense'&&st.split&&(st.who||[]).length){const amt=Math.round(nv(st.amount)*100)/100;const sel=st.who.filter(id=>acct(id));const m=st.mode||'even';const sh={};
-if(m==='even'){const n=sel.length+1;const base=Math.floor(amt*100/n);let spare=Math.round(amt*100)-base*n;sel.forEach((id,i)=>{sh[id]=(base+(i===0?spare:0))/100})}
+if(m==='even'){const n=sel.length+1;const base=Math.floor(amt*100/n);const spare=Math.round(amt*100)-base*n;sel.forEach((id,i)=>{sh[id]=(base+(i<spare?1:0))/100})}
 else if(m==='all'){const es=evenShares(amt,sel);sel.forEach(id=>sh[id]=es[id])}
 else if(m==='pct'){const ps=pctShares(amt,sel,id=>st.pct?.[id]);sel.forEach(id=>sh[id]=ps[id])}
 else sel.forEach(id=>{const v=+(st.amt?.[id]||0);if(v>0)sh[id]=Math.round(v*100)/100});
@@ -979,7 +978,7 @@ Object.entries(sh).forEach(([pid,v])=>{if(st.payer)return;if(v>0)D.txns.push({id
 sheet=null;save();toast(`Split saved — ${money(mine,0,cur(acct(st.accountId)))} yours, ${money(owed,0,cur(acct(st.accountId)))} owed to you`);return}
 const payAcct=(st.type==='expense'&&st.payer)?st.payer:st.accountId;
 const t={id:edit?.id||uid(),created:edit?.created||Date.now(),oneOff:st.oneOff||undefined,type:st.type,amount:Math.round(nv(st.amount)*100)/100,toAmount:fx()?Math.round(nv(st.toAmount)*100)/100:undefined,date:st.date,recvDate:st.type==='transfer'&&!st.pending?(st.recvDate||st.date):undefined,pending:st.type==='transfer'&&st.pending?true:undefined,accountId:payAcct,toAccountId:st.type==='transfer'?st.toAccountId:undefined,category:st.type==='transfer'?undefined:st.category,note:st.note.trim()};
-if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);sheet=null;if(onSaved)onSaved(t);save();toast(t.type==='transfer'?'Transfer recorded':edit?'Saved':'Added')};
+if(edit)D.txns=D.txns.map(x=>x.id===t.id?t:x);else D.txns.push(t);noteRecent(st.type,st.accountId);if(st.type==='transfer'&&st.toAccountId)noteRecent('transfer-to',st.toAccountId);sheet=null;if(onSaved)onSaved(t);save();toast(t.type==='transfer'?'Transfer recorded':edit?'Saved':'Added')};
 $('del')&&($('del').onclick=()=>{const grp=(edit.isplit&&edit.gid)?D.txns.filter(t=>t.gid===edit.gid):[];
 if(grp.length>1&&!confirm('This is part of a split payment across '+grp.length+' accounts. Delete all of it?'))return;
 const ids=grp.length>1?grp.map(t=>t.id):[edit.id];
