@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='12.7 · Sep 14 2026';
+const KEY='ledger-v1';const VERSION='12.8 · Sep 14 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -866,7 +866,7 @@ const owed=Object.values(shares).reduce((x,y)=>x+y,0);const mine=Math.round((amt
 const groups=(D.groups||[]).filter(g=>g.currency===fc);
 return`<label class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:${st.split?'8px':'12px'}"><input type="checkbox" id="spl" style="width:auto"${st.split?' checked':''}><span style="font-size:14px">Split this bill</span></label>
 ${st.split?`<div class="card" style="padding:12px 14px;margin-bottom:12px">
-${(()=>{const ppl0=peopleIn(fc);return`<div class="field" style="margin-bottom:10px"><div>Paid by</div><div class="chips" style="margin-top:2px"><button type="button" data-payer="" style="${!st.payer?'background:var(--mvS);border-color:var(--mvBd);color:var(--mv)':''}">Me</button>${ppl0.slice(0,3).map(pp=>`<button type="button" data-payer="${pp.id}" style="${st.payer===pp.id?'background:var(--mvS);border-color:var(--mvBd);color:var(--mv)':''}">${esc(pname(pp))}</button>`).join('')}<button type="button" data-payermore="1" style="border-style:dashed">Someone else ›</button></div>${st.payer?`<div class="note mv" style="margin:8px 0 0">${esc(pname(acct(st.payer)))} paid — your share becomes what you owe them. Nothing leaves your accounts.</div>`:''}</div>`})()}
+
 ${groups.length?`<div class="muted" style="font-size:10px;letter-spacing:.04em;text-transform:uppercase;margin:0 0 5px">Groups</div><div class="chips" style="margin-bottom:8px">${groups.map(g=>{const on=g.members.length&&g.members.some(m=>sel.includes(m));
 return`<button type="button" data-grp2="${g.id}" class="${on?'on':''}" style="${on?'background:var(--accent);border-color:var(--accent);color:#fff':''}">${esc(g.name)}</button>`}).join('')}<button type="button" id="newGrp" style="border-style:dashed">+ group</button></div>
 ${(()=>{const open=groups.filter(g=>g.members.some(m=>sel.includes(m)));if(!open.length)return'';
@@ -876,6 +876,17 @@ return`<button type="button" data-who="${id}" class="${on?'on':''}" style="${on?
 ${(()=>{const inGroup=new Set();groups.forEach(g=>(g.members||[]).forEach(m=>inGroup.add(m)));
 const loose=people.filter(a=>!inGroup.has(a.id));
 return`${groups.length?'<div class="muted" style="font-size:10px;letter-spacing:.04em;text-transform:uppercase;margin:0 0 5px">People</div>':''}<div class="chips" style="margin-bottom:10px">${loose.map(a=>`<button type="button" data-who="${a.id}" class="${sel.includes(a.id)?'on':''}" style="${sel.includes(a.id)?'background:var(--accent);border-color:var(--accent);color:#fff':''}">${esc(pname(a))}${sel.includes(a.id)?' ✓':''}</button>`).join('')}<button type="button" id="newWho" style="border-style:dashed">+ new</button>${groups.length?'':'<button type="button" id="newGrp" style="border-style:dashed">+ group</button>'}</div>`})()}
+${sel.length?(()=>{const inSel=sel.map(id=>acct(id)).filter(Boolean);
+const payer=st.payer&&sel.includes(st.payer)?st.payer:(st.payer&&!sel.includes(st.payer)?st.payer:'');
+const others=inSel.filter(p=>p.id!==st.payer);
+return`<div class="field" style="margin-bottom:10px"><div>Paid by</div><div class="chips" style="margin-top:2px">
+<button type="button" data-payer="" style="${!st.payer?'background:var(--mvS);border-color:var(--mvBd);color:var(--mv)':''}">Me</button>
+${inSel.map(pp=>`<button type="button" data-payer="${pp.id}" style="${st.payer===pp.id?'background:var(--mvS);border-color:var(--mvBd);color:var(--mv)':''}">${esc(pname(pp))}</button>`).join('')}
+${st.payer&&!sel.includes(st.payer)?`<button type="button" data-payer="${st.payer}" style="background:var(--mvS);border-color:var(--mvBd);color:var(--mv)">${esc(pname(acct(st.payer)))}</button>`:''}
+<button type="button" data-payermore="1" style="border-style:dashed">Someone else ›</button></div>
+${st.payer?(()=>{const mine=shares&&sel.length?Math.max(0,Math.round((amt-sel.reduce((x,id)=>x+(shares[id]||0),0))*100)/100):0;
+const rest=inSel.filter(p=>p.id!==st.payer);
+return`<div class="note mv" style="margin:8px 0 0">${esc(pname(acct(st.payer)))} paid${amt>0?' '+money(amt,0,fc):''} — <b>you owe ${esc(pname(acct(st.payer)))}${mine>0?' '+money(mine,0,fc):' your share'}</b>${rest.length?`<div class="muted" style="font-size:11px;margin-top:4px">${rest.map(p=>esc(pname(p))).join(rest.length>2?', ':' and ')} owe${rest.length===1?'s':''} ${esc(pname(acct(st.payer)))} their shares too — settled between them, not tracked here.</div>`:''}</div>`})():''}</div>`})():''}
 ${sel.length?`<div class="seg" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">${[['even','Evenly'],['all','They owe all'],['custom','Custom'],['pct','%']].map(([k,l])=>`<button data-smode="${k}" class="${mode===k?'on':''}" style="font-size:12px;padding:8px 0">${l}</button>`).join('')}</div>
 ${(mode==='custom'||mode==='pct')?sel.map(id=>{const a=acct(id);return`<div style="display:flex;align-items:center;gap:10px;padding:6px 0">${logoEl(a,28)}<span style="flex:1;min-width:0;font-size:14px">${esc(pname(a))}</span><input class="num" data-sv="${id}" inputmode="decimal" value="${mode==='pct'?(st.pct?.[id]??''):(st.amt?.[id]??'')}" placeholder="${mode==='pct'?'%':'0.00'}" style="width:104px;text-align:right;padding:8px 10px;font-size:15px"></div>`}).join(''):sel.map(id=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0"><span style="flex:1;font-size:14px">${esc(pname(acct(id)))}</span><span class="num" style="font-size:14px">${money(shares[id]||0,0,fc)}</span></div>`).join('')}
 <div style="display:flex;align-items:center;gap:10px;padding:8px 0 4px;border-top:1px solid var(--line);margin-top:4px"><span style="flex:1;font-size:14px">Your share</span><b class="num" style="font-size:14px">${money(mine,0,fc)}</b></div>
@@ -920,8 +931,8 @@ onCancel:()=>{sheet=back;renderSheet()},
 onPick:id=>{st.ito[i].id=id;sheet=back;renderSheet()}})});
 document.querySelectorAll('[data-payer]').forEach(b=>b.onclick=()=>{st.payer=b.dataset.payer;renderSheet()});
 document.querySelectorAll('[data-payermore]').forEach(b=>b.onclick=()=>{const back=sheet;
-openAcctPicker({title:'Who paid?',withPeople:true,current:st.payer,type:'payer',curHint:curOfForm(),
-filter:a=>isPerson(a)&&cur(a)===curOfForm(),
+openAcctPicker({title:'Who paid?',subtitle:'People not in this split',withPeople:true,current:st.payer,type:'payer',curHint:curOfForm(),
+filter:a=>isPerson(a)&&cur(a)===curOfForm()&&!(st.split&&(st.who||[]).includes(a.id)),
 onCancel:()=>{sheet=back;renderSheet()},
 onPick:id=>{st.payer=id;sheet=back;renderSheet()}})});
 document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{const parts=b.dataset.ac.split('|');
