@@ -185,7 +185,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='13.8 · Sep 16 2026';
+const KEY='ledger-v1';const VERSION='14.0 · Sep 16 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1742,7 +1742,7 @@ function flowDetail(months){const now=mk(today());const dates=D.txns.map(t=>t.da
 const ms=[];for(let i=1;i<=months;i++){const m=shiftMonth(now,-i);if(m>=first)ms.push(m)}
 const d0=new Date(today()+'T00:00:00');const useCur=ms.length===0;if(useCur)ms.push(now);
 const scale=useCur?(new Date(d0.getFullYear(),d0.getMonth()+1,0).getDate()/Math.max(1,d0.getDate())):1;
-const n=(ms.length||1)/scale;const inSrc={USD:{},INR:{}},outCat={USD:{},INR:{}},oneOffCat={USD:{},INR:{}},emis={};let moved=0,movedTo={};
+const n=(ms.length||1);const inSrc={USD:{},INR:{}},outCat={USD:{},INR:{}},oneOffCat={USD:{},INR:{}},emis={};let moved=0,movedTo={};
 D.txns.forEach(t=>{const m=mk(t.date);if(!ms.includes(m))return;const fa=acct(t.accountId),c=cur(fa);
 if(isOneOff(t)){if(t.type==='expense'){const k=t.category||'Other';oneOffCat[c]=oneOffCat[c]||{};oneOffCat[c][k]=(oneOffCat[c][k]||0)+t.amount}return}
 if(t.type==='income'){const k=t.category||'Other';inSrc[c]&&(inSrc[c][k]=(inSrc[c][k]||0)+t.amount)}
@@ -1918,7 +1918,11 @@ const ooInner=['USD','INR'].map(c=>{const e=Object.entries(d.oneOffCat[c]||{}).f
 return e.map(([k,v])=>`<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span class="muted">${esc(k)} <span style="font-size:11px">one-off</span></span><span class="num muted">${fc(v,c)} once</span></div>`).join('')}).join('');
 const outInner=['USD','INR'].map(c=>sideList(d.outCat[c],c)).join('')+(ooInner?`<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:6px"><div class="muted" style="font-size:11px;margin-bottom:3px">Excluded from the average</div>${ooInner}</div>`:'')+(sc>1.01?`<div class="muted" style="font-size:11px;margin-top:8px">Showing ${showScaled?'projected full-month figures':'what you actually spent so far'}. <button type="button" id="scTog" class="link" style="font-size:11px">Show ${showScaled?'actual':'at this pace'}</button></div>`:'');
 const emiInner=Object.entries(d.emis).map(([id,v])=>{const a=acct(id);return a?`<div class="l" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>${esc(a.name)} <span class="muted">${cur(a)}</span></span><span class="num">${fc(v,cur(a))}</span></div>`:''}).join('');
-return row('in','Money in',p.income,'in',inInner)+row('out','Actually spent',-p.spend,'out',outInner)+row('emi','Loan EMIs',-p.emi,'out',emiInner)})()}
+const sumSide=obj=>['USD','INR'].reduce((a,c)=>a+Object.values(obj[c]||{}).reduce((x,y)=>x+y,0)*(c===baseCur()?1:(toBase(1,c)||1)),0);
+const actIn=sumSide(d.inSrc),actOut=sumSide(d.outCat),actEmi=Object.values(d.emis).reduce((a,b)=>a+b,0);
+const proj=sc>1.01;
+return (proj?`<div class="muted" style="font-size:11px;margin:0 0 6px">Figures below are what has happened so far. The date above uses a full-month estimate from these ${d.dayNow||new Date(today()+'T00:00:00').getDate()} days.</div>`:'')
++row('in','Money in',actIn,'in',inInner)+row('out','Spent',-actOut,'out',outInner)+row('emi','Loan EMIs',-actEmi,'out',emiInner)})()}
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;padding:8px 0 0;border-top:1px solid var(--line);margin-top:4px"><span><b>Real surplus</b></span><b class="num">${f(p.save)}/month</b></div>
 <div class="seg" style="grid-template-columns:1fr 1fr;margin:12px 0 0">${[[3,'3-month average'],[6,'6-month average']].map(([v,l])=>`<button data-win="${v}" class="${+(st.wWin||6)===v?'on':''}" style="font-size:12px">${l}</button>`).join('')}</div></div>
 <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:8px">Net worth now</div>
@@ -1934,7 +1938,7 @@ return rows?`<div style="border-top:1px solid var(--line);margin-top:8px;padding
 <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Debt-free</span><b>${p.debtFree==null?'—':mLabel(p.debtFree)}</b></div>
 <div class="muted" style="font-size:11px;margin-top:4px">${D.accounts.filter(isLoan).length?`Loans run day by day at balance × rate ÷ ${(D.accounts.find(isLoan).basis||365)*100} — the same maths as the loan page. Interest costs about ${f(D.accounts.filter(isLoan).reduce((s,a)=>s+toBase(loanState(a).daily*365,cur(a)),0))} a year at today's balance.`:'No loans recorded.'}</div>
 ${D.accounts.filter(isCard).length?`<div class="muted" style="font-size:11px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px">${p.cardsRevolving?`${p.cardsRevolving} card${p.cardsRevolving===1?'':'s'} carrying a balance — paid down from your surplus, highest rate first.`:`Cards you clear each month aren't treated as debt to pay off${p.cardsCleared>0?` (${f(p.cardsCleared)} owed now is already counted in your spending)`:''}.`} <button class="link" id="cardMode" style="font-size:11px">Change ›</button></div>`:''}</div>
-<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:6px">If I save more each month (₹)</div>
+<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="muted" style="font-size:12px;margin-bottom:6px">If I save more each month (${CUR[baseCur()]?CUR[baseCur()].sym:''})</div>
 <input id="wx" class="num" inputmode="decimal" value="${st.wExtra||''}" placeholder="5000">
 ${extraTotal>0?`<div class="note mv" style="margin:10px 0 0">Extra <b class="num">${f(extraTotal)}/month</b>${cutSum>0?` = ${f(+st.wExtra||0)} you typed + ${(st.wCuts||[]).map(x=>`${f(x.v)} from ${esc(x.k.split('|')[1])}`).join(' + ')}`:''}.<br>Target moves to <b>${p.hit==null?'still out of reach at that rate':mLabel(p.hit)}</b>${(()=>{const base=project(target,{window:+(st.wWin||6),includeInvest:st.wInv!==false,extra:0});return base.hit!=null&&p.hit!=null?` — ${dur(base.hit-p.hit)} sooner`:''})()}.${cutSum>0?' <span class="muted">Tap a green suggestion again to remove it.</span>':''}</div>`:''}</div>
 ${(()=>{const cc=cardCheck();if(!cc.length)return'';
@@ -1983,7 +1987,7 @@ document.querySelectorAll('[data-cutk]').forEach(b=>b.onclick=()=>{st.wCuts=st.w
 const i=st.wCuts.findIndex(x=>x.k===k);if(i>=0){st.wCuts.splice(i,1);toast('Removed from your extra')}else{st.wCuts.push({k,v});toast('Counted in your extra')}
 save();openWealth()});
 $('pickAssets')&&($('pickAssets').onclick=openAssets);
-$('rateOpen')&&($('rateOpen').onclick=openRateSheet);
+$('rateOpen')&&($('rateOpen').onclick=()=>{pushSheet();openRateSheet()});
 $('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;save();openWealth()});
 $('manageRec')&&($('manageRec').onclick=()=>{pushSheet();openRecurring()});
 $('cardMode')&&($('cardMode').onclick=openCardModes);
