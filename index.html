@@ -235,7 +235,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.1 · Sep 27 2026';
+const KEY='ledger-v1';const VERSION='15.2 · Sep 28 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1538,7 +1538,7 @@ const into=(D.accounts.find(x=>cur(x)===cur(a)&&['checking','savings'].includes(
 if(!got)out.push({r:{id:'pay:'+a.id,name:a.name+' interest',type:'transfer',amount:Math.round(st.perPayout*100)/100,accountId:a.id,toAccountId:into,posted:[]},m,date:last})});
 D.accounts.filter(a=>isCard(a)&&a.closeDay&&a.showDue!==false).forEach(a=>{const cs=cardState(a);if(cs.paidInFull)return;
 const m=mk(cs.due);if((a.skipDue||[]).includes(m))return;
-const daysTo=Math.ceil((new Date(cs.due)-new Date(today()+'T00:00:00'))/864e5);if(daysTo>7)return;
+const daysTo=Math.ceil((new Date(cs.due+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5);if(daysTo>remindDays(a))return;
 const from=(D.accounts.find(x=>cur(x)===cur(a)&&['checking','savings'].includes(x.type))||{}).id;
 const amt=promoOn(a)?Math.max(cs.minDue,0):cs.remaining;
 if(promoOn(a)&&amt<=0.005)return;
@@ -1719,7 +1719,7 @@ const apr=cardApr(a);const daily=apr>0&&total>0?total*apr/100/365:0;
 const pctMin=+(a.minPct||0),floorMin=+(a.minFloor||0);
 let minDue=0;if(stmt>0){minDue=Math.max(floorMin,stmt*pctMin/100);if(a.minPlusInt)minDue+=daily*30;minDue=Math.min(minDue,stmt);minDue=Math.max(0,minDue-sincePays)}
 const util=a.limit>0?total/a.limit*100:null;
-const promoDays=a.promoUntil?Math.ceil((new Date(a.promoUntil)-new Date(today()+'T00:00:00'))/864e5):null;
+const promoDays=a.promoUntil?Math.ceil((new Date(a.promoUntil+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5):null;
 return{total,stmt,remaining,paidInFull,due,lastClose,nextClose:dOf(pc.getFullYear(),pc.getMonth()+1,close),minDue,apr,daily,util,promoDays,sinceCharges,overdue:asOf>due&&!paidInFull}}
 // ---------- loans ----------
 const emiFor=(P,ratePct,n)=>{const r=ratePct/1200;if(!(P>0)||!(n>0))return 0;if(r===0)return P/n;const f=Math.pow(1+r,n);return P*r*f/(f-1)};
@@ -2081,16 +2081,23 @@ ideas.push({cat:k,c,flex:fx,actual:v,budget:0,avg:0,overBudget:0,overAvg:0,save:
 return ideas.sort((x,y)=>toBase(y.save,y.c)-toBase(x.save,x.c)).slice(0,8)}
 
 // ---------- wealth goal UI ----------
+const remindDays=a=>{const v=a&&a.remindDays;return v===0||v>0?+v:7};
 function openCardModes(){sheet={title:'How cards are treated',body(){const cs=D.accounts.filter(isCard);
 return`<div class="muted" style="line-height:1.45;margin-bottom:12px">A card you pay in full every month isn't debt — the balance is this month's spending waiting for the due date, and it's already inside your measured spending. A card you carry is real debt, so the projection pays it down before saving.</div>
 ${cs.length?`<div class="card">${cs.map(a=>{const b=cardBehaviour(a);const mode=a.carry===true?'carry':a.carry===false?'full':'auto';
 return`<div class="brow"><div class="l"><span><b>${esc(a.name)}</b></span><span class="num ${b.total>0?'out':''}">${money(b.total,0,cur(a))}</span></div>
 <div class="muted" style="font-size:11px;margin:4px 0 8px">${b.promo?`0% until ${dlabel(b.promoUntil,1)}`:b.apr>0?`${b.apr}% APR`:'no APR set'}${b.due?` · due ${dlabel(b.due,1)}`:''}</div>
-<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['auto','Work it out'],['full','I pay in full'],['carry','I carry a balance']].map(([k,l])=>`<button data-cm="${a.id}|${k}" class="${mode===k?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div></div>`}).join('')}</div>`:'<div class="empty" style="padding:22px 16px;text-align:center">No credit cards yet<div class="muted" style="font-size:12px;margin-top:4px">Add one from Home › Add account to track statements and 0% offers.</div></div><button class="btn p" id="cmAdd" style="margin-top:10px">Add a credit card</button>'}
+<div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${[['auto','Work it out'],['full','I pay in full'],['carry','I carry a balance']].map(([k,l])=>`<button data-cm="${a.id}|${k}" class="${mode===k?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div>
+<div class="muted" style="font-size:11px;margin:10px 0 5px">Remind me on Home</div>
+<div class="seg" style="grid-template-columns:repeat(4,1fr);margin:0">${[[0,'On the day'],[3,'3 days'],[7,'7 days'],[14,'14 days']].map(([k,l])=>`<button data-cr="${a.id}|${k}" class="${remindDays(a)===k?'on':''}" style="font-size:11px;padding:8px 0">${l}</button>`).join('')}</div>
+${b.due?`<div class="muted num" style="font-size:11px;margin-top:6px">${(()=>{const n=remindDays(a);const dt=new Date(b.due+'T00:00:00');dt.setDate(dt.getDate()-n);const iso=dt.toISOString().slice(0,10);
+return n===0?`Appears on ${dlabel(b.due,1)}, the due date.`:`Appears from ${dlabel(iso,1)} — ${n} days before ${dlabel(b.due,1)}.`})()}</div>`:''}</div>`}).join('')}</div>`:'<div class="empty" style="padding:22px 16px;text-align:center">No credit cards yet<div class="muted" style="font-size:12px;margin-top:4px">Add one from Home › Add account to track statements and 0% offers.</div></div><button class="btn p" id="cmAdd" style="margin-top:10px">Add a credit card</button>'}
 <div class="muted" style="font-size:11px;margin-top:12px">"Work it out" uses your statement: if the last one wasn't paid by its due date, it's treated as carried.</div>`},
 wire(){const ca=document.getElementById('cmAdd');ca&&(ca.onclick=()=>{pushSheet();openAccount({type:'credit',currency:ensureCur()},true)});
 document.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.cm.split('|');const a=acct(id);
 if(m==='auto')delete a.carry;else a.carry=(m==='carry');localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
+document.querySelectorAll('[data-cr]').forEach(b=>b.onclick=()=>{const[id,n]=b.dataset.cr.split('|');const a=acct(id);
+a.remindDays=+n;localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
 document.getElementById('cancel').onclick=()=>openWealth()}};renderSheet()}
 function openAssets(){const assets=D.accounts.filter(a=>isInvest(a)&&!isDep(a));
 sheet={title:'What counts in the target',body(){const ex=D.settings.wExclude||[];const c=baseCur();
