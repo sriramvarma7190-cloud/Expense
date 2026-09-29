@@ -235,7 +235,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.2 · Sep 28 2026';
+const KEY='ledger-v1';const VERSION='15.3 · Sep 29 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -2098,7 +2098,7 @@ document.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{const[id,m]=b.d
 if(m==='auto')delete a.carry;else a.carry=(m==='carry');localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
 document.querySelectorAll('[data-cr]').forEach(b=>b.onclick=()=>{const[id,n]=b.dataset.cr.split('|');const a=acct(id);
 a.remindDays=+n;localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
-document.getElementById('cancel').onclick=()=>openWealth()}};renderSheet()}
+}};renderSheet()}
 function openAssets(){const assets=D.accounts.filter(a=>isInvest(a)&&!isDep(a));
 sheet={title:'What counts in the target',body(){const ex=D.settings.wExclude||[];const c=baseCur();
 const mode=D.settings.wInv===false?'cash':(D.settings.wMode==='custom'||ex.length?'custom':'all');
@@ -2121,7 +2121,7 @@ localStorage.setItem(KEY,JSON.stringify(D));openAssets()});
 document.querySelectorAll('[data-atog]').forEach(el=>el.onclick=()=>{const id=el.dataset.atog;D.settings.wInv=true;D.settings.wMode='custom';D.settings.wExclude=D.settings.wExclude||[];
 const i=D.settings.wExclude.indexOf(id);if(i>=0)D.settings.wExclude.splice(i,1);else D.settings.wExclude.push(id);
 localStorage.setItem(KEY,JSON.stringify(D));openAssets()});
-document.getElementById('cancel').onclick=()=>openWealth()}};renderSheet()}
+}};renderSheet()}
 function openRateSheet(){const lt=lastTransferFx();let busy=false,msg='';
 sheet={title:'Exchange rate',body(){const mode=fxSource();const used=fxRate();
 const when=D.settings.fxAtTime?new Date(D.settings.fxAtTime):null;
@@ -2247,7 +2247,7 @@ $('pickAssets')&&($('pickAssets').onclick=openAssets);
 $('rateOpen')&&($('rateOpen').onclick=()=>{pushSheet();openRateSheet()});
 $('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;save();openWealth()});
 $('manageRec')&&($('manageRec').onclick=()=>{pushSheet();openRecurring()});
-$('cardMode')&&($('cardMode').onclick=openCardModes);
+$('cardMode')&&($('cardMode').onclick=()=>{pushSheet();openCardModes()});
 $('ooReview')&&($('ooReview').onclick=()=>{markBack('wealth');const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)).sort((a,b)=>b.date.localeCompare(a.date));
 if(oo.length){const c=cur(acct(oo[0].accountId));R.cur=c;localStorage.setItem('ledger-cur',c)}
 F={q:'',acct:'all',type:'expense',cat:null,month:null,cur:null,year:null,oneOff:true};sheet=null;tab='activity';render();window.scrollTo(0,0)});
@@ -2419,7 +2419,7 @@ $('slab').onchange=e=>{D.settings.slab=e.target.value;save()};
 $('atax').onchange=e=>{D.settings.afterTax=e.target.checked;save()};
 $('ok').onclick=()=>{save();openSettings()};document.getElementById('cancel').onclick=()=>openSettings()}};renderSheet()}
 function openSettings(){sheet={title:'Settings',body(){
-const rows=[['appearance','Appearance','Theme, accent, bank logos'],['tax','Income tax slab',D.settings.slab?D.settings.slab+'% · '+(D.settings.afterTax?'after-tax shown':'gross shown'):'Not set'],['cats','Categories','Add, rename, reorder, flexibility'],['rate','Exchange rate','₹'+fxRate()+' per $'],['cards','Cards','How each card is treated'],['pin','PIN lock',D.settings.pinHash?'On':'Off'],['cloud','Cloud backup',cfgGet()?(syncMeta().at?'Last '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'Signed out'):'Not set up'],['backup','Backup file','Copy, paste, save as file']];
+const rows=[['appearance','Appearance','Theme, accent, bank logos'],['tax','Income tax slab',D.settings.slab?D.settings.slab+'% · '+(D.settings.afterTax?'after-tax shown':'gross shown'):'Not set'],['cats','Categories','Add, rename, reorder, flexibility'],['rate','Exchange rate','₹'+fxRate()+' per $'],['cards','Cards','How each card is treated, payment reminders'],['pin','PIN lock',D.settings.pinHash?'On':'Off'],['cloud','Cloud backup',cfgGet()?(syncMeta().at?'Last '+dlabel(new Date(syncMeta().at).toISOString().slice(0,10)):'Signed out'):'Not set up'],['backup','Backup file','Copy, paste, save as file']];
 return`<div class="card">${rows.map(([k,t,sub])=>`<div class="row" data-set="${k}"><div class="main"><div class="t" style="font-size:15px">${t}</div><div class="s">${sub}</div></div><div class="amt muted">›</div></div>`).join('')}</div>
 <div class="muted" style="font-size:11px;margin-top:12px;text-align:center">Ledger ${VERSION}</div>`},
 wire(){document.querySelectorAll('[data-set]').forEach(el=>el.onclick=()=>{const k=el.dataset.set;pushSheet();
