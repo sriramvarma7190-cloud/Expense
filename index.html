@@ -245,7 +245,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.5 · Sep 29 2026';
+const KEY='ledger-v1';const VERSION='15.6 · Sep 30 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -872,9 +872,12 @@ document.addEventListener('change',e=>{const t=e.target;if(t&&(t.type==='checkbo
 function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';SHELL=null;return}
 const inner=`<div class="grip"></div><div class="head">${STACK.length?`<button id="backb" style="background:none;border:0;color:var(--mv);font:inherit;font-size:15px;padding:0 10px 0 0;width:auto">‹ Back</button>`:''}<b>${sheet.title}</b><button id="cancel">${STACK.length?'Close':'Cancel'}</button></div>${sheet.body()}`;
 let box=el.querySelector('.sheet');
-if(!box||!SHELL){
+// patch in place only while it is the same sheet; a different sheet gets fresh
+// nodes so a click still in flight cannot land on the new screen's handlers
+const same=(SHELL===sheet);
+if(!box||!same){
 el.innerHTML=`<div class="overlay" id="ov"><div class="sheet${sheet.tall?' tall':''}">${inner}</div></div>`;
-SHELL=1;box=el.querySelector('.sheet');
+SHELL=sheet;box=el.querySelector('.sheet');
 const ov=document.getElementById('ov');
 ov.onclick=e=>{if(e.target.id==='ov')backSheet()};
 ov.addEventListener('touchstart',e=>{const bx=el.querySelector('.sheet');if(!bx||bx.scrollTop>0)return;GY=e.touches[0].clientY;GD=0},{passive:true});
