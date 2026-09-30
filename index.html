@@ -245,7 +245,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.4 · Sep 29 2026';
+const KEY='ledger-v1';const VERSION='15.5 · Sep 29 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -262,17 +262,17 @@ const grpLocale=c=>c==='INR'?'en-IN':'en-US';
 function groupNum(str,c){if(str==null)return'';let v=String(str).replace(/[^0-9.]/g,'');const parts=v.split('.');let ip=parts[0]||'';const dp=parts.length>1?'.'+parts.slice(1).join('').slice(0,2):'';
 if(!ip)return dp;const n=Number(ip);if(!isFinite(n))return ip+dp;
 return n.toLocaleString(grpLocale(c))+dp}
-function wireNum(el,c,onVal){if(!el||el._numWired)return;el._numWired=1;
+function wireNum(el,c,onVal){if(!el)return;el._numCb=onVal;el._numCur=c;if(el._numWired)return;el._numWired=1;
 const clean=t=>{t=t.replace(/[^0-9.]/g,'');const i=t.indexOf('.');if(i>=0)t=t.slice(0,i+1)+t.slice(i+1).replace(/\./g,'');return t};
 el.addEventListener('input',()=>{const before=el.value.slice(0,el.selectionStart==null?el.value.length:el.selectionStart);
 const digitsBefore=(before.match(/[0-9.]/g)||[]).length;
-const raw=clean(el.value);const shown=groupNum(raw,c);el.value=shown;
+const raw=clean(el.value);const shown=groupNum(raw,el._numCur||c);el.value=shown;
 let pos=shown.length,seen=0;
 for(let k=0;k<shown.length;k++){if(/[0-9.]/.test(shown[k]))seen++;if(seen>=digitsBefore){pos=k+1;break}}
 if(digitsBefore===0)pos=0;
 try{el.setSelectionRange(pos,pos)}catch(e){}
-if(onVal)onVal(raw)});
-el.addEventListener('blur',()=>{el.value=groupNum(el.value,c)})}
+if(el._numCb)el._numCb(raw)});
+el.addEventListener('blur',()=>{el.value=groupNum(el.value,el._numCur||c)})}
 const pctShares=(amt,ids,pctOf)=>{const out={};const raw=ids.map(id=>({id,v:amt*(+(pctOf(id)||0))/100}));
 const floored=raw.map(r=>({id:r.id,c:Math.floor(r.v*100)}));
 let used=floored.reduce((a,b)=>a+b.c,0);const cap=Math.round(amt*100);
@@ -869,24 +869,31 @@ function blurActive(){const a=document.activeElement;if(a&&a.blur&&a.tagName!=='
 (function(){const isTap=e=>{const t=e.target&&e.target.closest?e.target.closest('button,[data-c],[data-who],[data-payer],[data-ac],[data-sm],[data-t],input[type=checkbox],input[type=radio],label'):null;return t&&!(t.tagName==='INPUT'&&['text','number','search','email','password','tel','url','date'].includes((t.type||'').toLowerCase()))};
 ['pointerdown','mousedown','touchstart'].forEach(ev=>document.addEventListener(ev,e=>{if(isTap(e))blurActive()},true));
 document.addEventListener('change',e=>{const t=e.target;if(t&&(t.type==='checkbox'||t.type==='radio'))blurActive()},true)})();
-function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';return}
-const prevBox=el.querySelector('.sheet');const prevTop=prevBox?prevBox.scrollTop:null;const af=document.activeElement;const textish=af&&af.tagName==='INPUT'&&!['checkbox','radio','date','button','submit'].includes((af.type||'').toLowerCase());const afId=(textish&&af.id)?af.id:null;const afPos=(textish&&af.selectionStart!=null)?af.selectionStart:null;
-el.innerHTML=`<div class="overlay" id="ov"><div class="sheet${sheet.tall?' tall':''}"><div class="grip"></div><div class="head">${STACK.length?`<button id="backb" style="background:none;border:0;color:var(--mv);font:inherit;font-size:15px;padding:0 10px 0 0;width:auto">‹ Back</button>`:''}<b>${sheet.title}</b><button id="cancel">${STACK.length?'Close':'Cancel'}</button></div>${sheet.body()}</div></div>`;
-document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')backSheet()};
+function renderSheet(){const el=document.getElementById('sheet');document.body.classList.toggle('sheetopen',!!sheet);if(!sheet){el.innerHTML='';SHELL=null;return}
+const inner=`<div class="grip"></div><div class="head">${STACK.length?`<button id="backb" style="background:none;border:0;color:var(--mv);font:inherit;font-size:15px;padding:0 10px 0 0;width:auto">‹ Back</button>`:''}<b>${sheet.title}</b><button id="cancel">${STACK.length?'Close':'Cancel'}</button></div>${sheet.body()}`;
+let box=el.querySelector('.sheet');
+if(!box||!SHELL){
+el.innerHTML=`<div class="overlay" id="ov"><div class="sheet${sheet.tall?' tall':''}">${inner}</div></div>`;
+SHELL=1;box=el.querySelector('.sheet');
+const ov=document.getElementById('ov');
+ov.onclick=e=>{if(e.target.id==='ov')backSheet()};
+ov.addEventListener('touchstart',e=>{const bx=el.querySelector('.sheet');if(!bx||bx.scrollTop>0)return;GY=e.touches[0].clientY;GD=0},{passive:true});
+ov.addEventListener('touchmove',e=>{if(GY==null)return;GD=e.touches[0].clientY-GY;const bx=el.querySelector('.sheet');if(GD>0&&bx)bx.style.transform='translateY('+Math.min(GD,160)+'px)'},{passive:true});
+ov.addEventListener('touchend',()=>{const bx=el.querySelector('.sheet');if(bx)bx.style.transform='';if(GD>90)backSheet();GY=null;GD=0},{passive:true});
+}else{
+box.className='sheet'+(sheet.tall?' tall':'');
+morph(box,inner);
+}
 document.getElementById('cancel').onclick=closeSheet;
 document.getElementById('backb')&&(document.getElementById('backb').onclick=backSheet);
-document.getElementById('ov').addEventListener('touchstart',e=>{const bx=el.querySelector('.sheet');if(!bx||bx.scrollTop>0)return;GY=e.touches[0].clientY;GD=0},{passive:true});
-document.getElementById('ov').addEventListener('touchmove',e=>{if(GY==null)return;GD=e.touches[0].clientY-GY;const bx=el.querySelector('.sheet');if(GD>0&&bx)bx.style.transform='translateY('+Math.min(GD,160)+'px)'},{passive:true});
-document.getElementById('ov').addEventListener('touchend',()=>{const bx=el.querySelector('.sheet');if(bx)bx.style.transform='';if(GD>90)backSheet();GY=null;GD=0},{passive:true});
 sheet.wire();
 
 (function(){const cc=(typeof sheet.cur==='function'?sheet.cur():null)||(el.querySelector('[data-formcur]')?el.querySelector('[data-formcur]').dataset.formcur:null)||(typeof R!=='undefined'?R.cur:'USD');
 el.querySelectorAll('input.num[inputmode]').forEach(inp=>{const c=inp.dataset.cur||cc;
-if(inp.value)inp.value=groupNum(inp.value,c);
+if(inp.value&&document.activeElement!==inp)inp.value=groupNum(inp.value,c);
 const prev=inp.oninput;
-wireNum(inp,c,()=>{if(prev)prev.call(inp,{target:{value:String(inp.value).replace(/[^0-9.]/g,''),selectionStart:null}})})})})();
-if(prevTop!=null){const box=el.querySelector('.sheet');if(box)box.scrollTop=prevTop}
-if(afId){const n=document.getElementById(afId);if(n&&n.focus){try{n.focus({preventScroll:true});if(afPos!=null&&n.setSelectionRange)n.setSelectionRange(afPos,afPos)}catch(e){}}}}
+wireNum(inp,c,()=>{if(prev)prev.call(inp,{target:{value:String(inp.value).replace(/[^0-9.]/g,''),selectionStart:null}})})})})()}
+let SHELL=null;
 
 let FOCUSED2=0;
 function openAccount(edit,isNew){if(isNew||edit&&!edit.id){const pre=edit||{};edit=null;var PRE=pre}const P=typeof PRE!=='undefined'?PRE:{};const st={name:edit?.name||'',bank:edit?.bank||'',type:edit?.type||P.type||'checking',currency:edit?.currency||P.currency||'USD',logoUrl:edit?.logoUrl||'',showLogo:!!(edit&&edit.logoUrl),opening:edit?String(Math.abs(edit.opening||0)):'',bankSays:'',kind:edit?.kind||P.kind||'gold',rate:edit?.rate!=null?String(edit.rate):'',principal:edit?.principal!=null?String(edit.principal):'',emi:edit?.emi!=null&&edit.emi?String(edit.emi):'',months:edit?.months?String(edit.months):'',emiDay:edit?.emiDay||0,stDay:edit?.stDay||P.stDay||1,basis:edit?.basis||365,since:edit?.since||today(),showDue:edit?.showDue!==false,init:JSON.parse(JSON.stringify(edit?.init||{byPurity:{}})),rates:JSON.parse(JSON.stringify(edit?.rates||{})),rateAt:edit?.rateAt||'',busy:false,fmsg:'',show18:false,state:edit?.state||'',priceUnit:edit?.priceUnit||'10g',cal:edit?.cal||null,calIn:'',area:edit?.area??'',areaUnit:edit?.areaUnit||'sqft',pin:edit?.pin||'',apprPct:edit?.apprPct??'',monthly:edit?.monthly?String(edit.monthly):'',closeDay:edit?.closeDay||1,dueDay:edit?.dueDay||1,limit:edit?.limit?String(edit.limit):'',apr:edit?.apr?String(edit.apr):'',promoUntil:edit?.promoUntil||'',minFloor:edit?.minFloor?String(edit.minFloor):'',minPct:edit?.minPct?String(edit.minPct):'',minPlusInt:!!edit?.minPlusInt,termMonths:edit?.termMonths?String(edit.termMonths):'',comp:edit?.comp??4,payout:edit?.payout??0,day:edit?.day||1};
@@ -962,7 +969,7 @@ if(e.target.closest&&(e.target.closest('#bankSug')||e.target.id==='ab'))return;b
 function suggest(){const box=$('bankSug');if(!box)return;const q=st.bank.trim().toLowerCase();if(q.length<2){box.innerHTML='';return}
 const hits=[...IN_BANKS.map(([c,n])=>({n,c:'INR',k:(n+' '+(IN_ALIAS[c]||'')).toLowerCase()})),...BANKS.filter(b=>!b[4]).map(b=>({n:b[0].split('|')[0].replace(/\b\w/g,ch=>ch.toUpperCase()),c:(/\.in$|bank\.in$/.test(b[1]||'')?'INR':'USD'),k:b[0].toLowerCase()}))].filter(x=>x.k.includes(q)).filter((x,i,arr)=>arr.findIndex(y=>y.n.toLowerCase()===x.n.toLowerCase())===i).sort((a,b)=>{const ai=a.k.indexOf(q),bi=b.k.indexOf(q);return(ai<0?99:ai)-(bi<0?99:bi)||a.n.length-b.n.length}).slice(0,6);
 if(!hits.length||(hits.length===1&&hits[0].n.toLowerCase()===q)){box.innerHTML='';return}
-box.innerHTML=`<div class="card" style="position:absolute;left:0;right:0;top:4px;z-index:5;max-height:230px;overflow:auto">${hits.map((h,i)=>`<div class="row" data-bs="${i}" style="padding:9px 12px;gap:10px">${logoEl({bank:h.n,name:h.n},26)}<div class="main"><div class="t" style="font-size:14px">${esc(h.n)}</div></div></div>`).join('')}</div>`;
+morph(box,`<div class="card" style="position:absolute;left:0;right:0;top:4px;z-index:5;max-height:230px;overflow:auto">${hits.map((h,i)=>`<div class="row" data-bs="${i}" style="padding:9px 12px;gap:10px">${logoEl({bank:h.n,name:h.n},26)}<div class="main"><div class="t" style="font-size:14px">${esc(h.n)}</div></div></div>`).join('')}</div>`);
 box.querySelectorAll('[data-bs]').forEach(el=>el.onclick=()=>{const pick=hits[+el.dataset.bs];box.innerHTML='';grab();st.bank=pick.n;
 if(!edit&&pick.c&&CUR[pick.c]&&st.currency!==pick.c){st.currency=pick.c}
 renderSheet()})}
@@ -2489,7 +2496,7 @@ D.settings.pinHash=await sha(v);sheet=null;save();toast('PIN set')};
 $('ok').onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go()};
 $('rm')&&($('rm').onclick=async()=>{if(await sha(inp.value)!==D.settings.pinHash){$('pinMsg').textContent='Enter your current PIN first.';return}delete D.settings.pinHash;sheet=null;save();toast('PIN removed')})}};renderSheet()}
 function showLock(){const el=document.getElementById('lock');let buf='';el.hidden=false;
-const draw=()=>{el.innerHTML=`<div style="font-size:22px;font-weight:700;letter-spacing:-.5px">Ledger</div><div class="muted">Enter your PIN</div><div class="dots">${Array.from({length:Math.max(4,buf.length)},(_,i)=>`<i class="${i<buf.length?'f':''}"></i>`).join('')}</div><div class="pad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-n="${n}">${n}</button>`).join('')}<button class="ghost" data-n="del">Delete</button><button data-n="0">0</button><button class="ghost" data-n="ok">OK</button></div><div id="lockMsg" class="muted" style="min-height:16px"></div>`;
+const draw=()=>{morph(el,`<div style="font-size:22px;font-weight:700;letter-spacing:-.5px">Ledger</div><div class="muted">Enter your PIN</div><div class="dots">${Array.from({length:Math.max(4,buf.length)},(_,i)=>`<i class="${i<buf.length?'f':''}"></i>`).join('')}</div><div class="pad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-n="${n}">${n}</button>`).join('')}<button class="ghost" data-n="del">Delete</button><button data-n="0">0</button><button class="ghost" data-n="ok">OK</button></div><div id="lockMsg" class="muted" style="min-height:16px"></div>`);
 el.querySelectorAll('[data-n]').forEach(b=>b.onclick=async()=>{const n=b.dataset.n;if(n==='del')buf=buf.slice(0,-1);else if(n==='ok'){if(await sha(buf)===D.settings.pinHash){el.hidden=true;sessionStorage.setItem('unlocked','1');return}buf='';draw();document.getElementById('lockMsg').textContent='Wrong PIN';return}else if(buf.length<6)buf+=n;draw();if(buf.length>=4&&await sha(buf)===D.settings.pinHash){el.hidden=true;sessionStorage.setItem('unlocked','1')}})};draw()}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)sessionStorage.setItem('hiddenAt',Date.now());else if(D.settings.pinHash&&Date.now()-(+sessionStorage.getItem('hiddenAt')||0)>5*60*1000&&document.getElementById('lock').hidden)showLock()});
 
