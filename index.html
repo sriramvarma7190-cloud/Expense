@@ -46,6 +46,16 @@ body.sheetopen #menuBtn{opacity:0;pointer-events:none}
 svg.fx{width:100%;height:110px;display:block}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+*{-webkit-tap-highlight-color:transparent}
+button,.row,.brow,[data-acct],[data-grp],[data-txn],[data-set],[data-m],.pill,.link,a{touch-action:manipulation}
+.row:active,.brow[data-cat]:active,.brow[data-goal]:active{background:var(--bg)}
+button:not(.plus):active{opacity:.55}
+.pill:active,.btn:active{transform:scale(.975)}
+.plus:active{transform:scale(.94)}
+nav button:active{opacity:1}
+nav button:active svg{transform:scale(.9)}
+nav button svg{transition:transform .12s}
+@media (prefers-reduced-motion:reduce){.pill:active,.btn:active,.plus:active,nav button:active svg{transform:none}}
 body{padding-bottom:calc(84px + env(safe-area-inset-bottom));min-height:100vh;min-height:100dvh;box-sizing:border-box}
 .wrap{max-width:720px;margin:0 auto;padding:22px 20px 0}
 .num{font-variant-numeric:tabular-nums}
@@ -235,7 +245,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.3 · Sep 29 2026';
+const KEY='ledger-v1';const VERSION='15.4 · Sep 29 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -350,6 +360,8 @@ const ib=IN_BANKS.find(([c,nm])=>nm.toLowerCase()===n)||IN_BANKS.find(([c,nm])=>
 for(const[k,d,c,sl,img]of BANKS){const keys=k.split('|');if(keys.some(x=>n===x||n.startsWith(x+' ')||n.includes(' '+x)||(x.length>3&&n.includes(x))))return{domain:d,color:c,slug:sl,img}}return null}
 const isImgUrl=v=>/^https?:\/\/.+\.(png|jpe?g|svg|webp|gif|ico)(\?.*)?$/i.test(v)||/^data:image\//i.test(v);
 const logoSources=d=>[`https://www.google.com/s2/favicons?domain=${d}&sz=128`,`https://icons.duckduckgo.com/ip3/${d}.ico`,`https://logo.clearbit.com/${d}`,`https://${d}/apple-touch-icon.png`,`https://${d}/favicon.ico`];
+const LOGOWARM={};
+function logoWarm(src){if(!src||LOGOWARM[src])return;const im=new Image();im.decoding='async';im.src=src;LOGOWARM[src]=im}
 const LOGOOK=(()=>{try{return JSON.parse(localStorage.getItem('ledger-logook')||'{}')}catch(e){return{}}})();
 const logoKey=img=>img&&img.dataset?(img.dataset.lkey||''):'';
 function logoRemember(img){const k=logoKey(img);if(!k||!img.src)return;if(LOGOOK[k]===img.src)return;LOGOOK[k]=img.src;try{localStorage.setItem('ledger-logook',JSON.stringify(LOGOOK))}catch(e){}}
@@ -373,7 +385,8 @@ const lkey=((a.logoUrl||'')+'|'+(a.bank||'')+'|'+((D.settings.logoStyle||'mark')
 const known=LOGOOK[lkey];
 if(known&&srcs.length){srcs=[known].concat(srcs.filter(x=>x!==known))}
 const mono=(a.bank||a.name).slice(0,2).toUpperCase();
-return`<div class="mono logo" style="width:${size}px;height:${size}px;border-radius:${Math.round(size*.28)}px;background:${b?b.color:'var(--bg)'};color:${b?'#fff':'var(--ink2)'};font-size:${Math.round(size/3)}px"><span>${esc(mono)}</span>${srcs.length?`<img src="${esc(srcs[0])}" data-alt="${esc(srcs.slice(1).join('|'))}" data-lkey="${esc(lkey)}" alt="" loading="lazy" onerror="logoNext(this)" onload="logoCheck(this)" class="${/simpleicons/.test(srcs[0])?'plain':''}">`:''}</div>`}
+if(known)logoWarm(known);
+return`<div class="mono logo${known?' ok':''}" style="width:${size}px;height:${size}px;border-radius:${Math.round(size*.28)}px;background:${b?b.color:'var(--bg)'};color:${b?'#fff':'var(--ink2)'};font-size:${Math.round(size/3)}px"><span>${esc(mono)}</span>${srcs.length?`<img src="${esc(srcs[0])}" data-alt="${esc(srcs.slice(1).join('|'))}" data-lkey="${esc(lkey)}" alt="" decoding="sync" fetchpriority="high" onerror="logoNext(this)" onload="logoCheck(this)" class="${/simpleicons/.test(srcs[0])?'plain':''}">`:''}</div>`}
 function balances(){const b={};D.accounts.forEach(a=>b[a.id]=a.opening||0);D.txns.forEach(t=>{if(scheduled(t)&&t.type!=='transfer')return;if(t.type==='expense')b[t.accountId]-=t.amount;else if(t.type==='income')b[t.accountId]+=t.amount;else{if(!scheduled(t))b[t.accountId]-=t.amount;if(landed(t))b[t.toAccountId]+=(t.toAmount??t.amount)}});
 D.accounts.filter(isLoan).forEach(a=>{b[a.id]=-loanState(a).out});return b}
 // units held per investment account (and per purity for gold)
@@ -546,7 +559,7 @@ const days=late?Math.round((new Date(today()+'T00:00:00')-new Date(t.recvDate+'T
 return late?` · expected ${dlabel(t.recvDate,1)} · ${days} day${days===1?'':'s'} ago`:` · lands ${dlabel(t.recvDate,1)}`})():'')):`${esc(t.category||'')}${SPLITALL&&t.isplit&&t.gid?` · split across ${D.txns.filter(x=>x.gid===t.gid).length} accounts`:(SPLITALL&&t.gid&&D.txns.some(x=>x.gid===t.gid&&x.type==='transfer')?` · split with ${D.txns.filter(x=>x.gid===t.gid&&x.type==='transfer').length} ${D.txns.filter(x=>x.gid===t.gid&&x.type==='transfer').length===1?'person':'people'}`:(f?' · '+esc(f.name):''))}${ooTag}`;
 const amt=t.type==='expense'?money(-((SPLITALL&&t.gid&&D.txns.some(x=>x.gid===t.gid&&x.type==='transfer'))?D.txns.filter(x=>x.gid===t.gid).reduce((a,b)=>a+b.amount,0):t.amount),1,cur(f)):t.type==='income'?money((SPLITALL&&t.isplit&&t.gid)?D.txns.filter(x=>x.gid===t.gid).reduce((a,b)=>a+b.amount,0):t.amount,1,cur(f)):(SPLITALL&&t.gid&&t.type==='transfer'&&!D.txns.some(x=>x.gid===t.gid&&x.type==='expense'))?money(-D.txns.filter(x=>x.gid===t.gid).reduce((a,b)=>a+b.amount,0),1,cur(f)):fx?`${money(t.amount,0,cur(f))}<small style="color:var(--mv)">→ ${money(t.toAmount,0,cur(to))}</small>`:money(t.amount,0,cur(f));
 const conv=(typeof F!=='undefined'&&F.all&&f&&cur(f)!==baseCur())?`<small class="muted">= ${money(toBase(t.amount,cur(f)),0,baseCur())}</small>`:'';
-return`<div class="row" data-txn="${t.id}">${catTile(t.category,t.type,34)}<div class="main"><div class="t" style="font-weight:500">${esc(title)}</div><div class="s">${showDate?dlabel(t.date)+' · ':''}${esc(sub)}</div>${splitChips(t)}</div><div class="amt num ${cls}">${amt}${conv}</div></div>`}
+return`<div class="swipe"><div class="swacts"><button type="button" class="ed" data-sw="ed|${t.id}">Edit</button><button type="button" class="dl" data-sw="dl|${t.id}">Delete</button></div><div class="row" data-txn="${t.id}">${catTile(t.category,t.type,34)}<div class="main"><div class="t" style="font-weight:500">${esc(title)}</div><div class="s">${showDate?dlabel(t.date)+' · ':''}${esc(sub)}</div>${splitChips(t)}</div><div class="amt num ${cls}">${amt}${conv}</div></div></div>`}
 
 // ---------- views ----------
 function noticeTrim(){return''}
@@ -634,7 +647,7 @@ const markBack=(reopen)=>{BACK={tab,cur:R.cur,month:R.month,catOpen:R.catOpen,ch
 function refreshList(){const host=document.getElementById('alist');if(!host)return;
 const html=activity();const i=html.indexOf('<div id="alist">');
 if(i<0)return;const inner=html.slice(i+16,html.lastIndexOf('</div>'));
-host.innerHTML=inner;wireList(host);wireSwipe(host);
+morph(host,inner);wireList(host);wireSwipe(host);
 const go=document.getElementById('qGo'),clr=document.getElementById('qClr');
 const wrap=document.querySelector('.qwrap');
 if(wrap&&!F.q&&go){go.remove();clr&&clr.remove()}
@@ -724,27 +737,27 @@ function wireHeader(){const bar=document.querySelector('.hbar');if(!bar)return;
 if(wireHeader._h)window.removeEventListener('scroll',wireHeader._h);
 const on=()=>{const st=window.scrollY>16;bar.classList.toggle('stuck',st)};
 wireHeader._h=on;window.addEventListener('scroll',on,{passive:true});on()}
-function wireSwipe(host){if(!host)return;
-host.querySelectorAll('.card > .row[data-txn]').forEach(row=>{
-if(row.parentNode.classList.contains('swipe'))return;
-const wrap=document.createElement('div');wrap.className='swipe';
-row.parentNode.insertBefore(wrap,row);wrap.appendChild(row);
-const acts=document.createElement('div');acts.className='swacts';
-acts.innerHTML='<button type="button" class="ed">Edit</button><button type="button" class="dl">Delete</button>';
-wrap.insertBefore(acts,row);
-acts.querySelector('.ed').onclick=e=>{e.stopPropagation();closeSwipes();const t=D.txns.find(x=>x.id===row.dataset.txn);if(t)openTxn(t)};
-acts.querySelector('.dl').onclick=e=>{e.stopPropagation();const t=D.txns.find(x=>x.id===row.dataset.txn);closeSwipes();if(t)removeTxn(t)};
-let x0=null,y0=null,drag=false;
-row.addEventListener('touchstart',e=>{x0=e.touches[0].clientX;y0=e.touches[0].clientY;drag=false},{passive:true});
-row.addEventListener('touchmove',e=>{if(x0==null)return;
+function wireSwipe(){}
+function swipeInit(){if(swipeInit._done)return;swipeInit._done=1;
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-sw]');if(!b)return;
+e.stopPropagation();e.preventDefault();
+const[kind,id]=b.dataset.sw.split('|');const t=D.txns.find(x=>x.id===id);
+closeSwipes();if(!t)return;
+if(kind==='ed')openTxn(t);else removeTxn(t)},true);
+let x0=null,y0=null,drag=false,wrap=null;
+document.addEventListener('touchstart',e=>{const row=e.target.closest&&e.target.closest('.swipe>.row');
+if(!row){x0=null;wrap=null;return}
+wrap=row.parentNode;x0=e.touches[0].clientX;y0=e.touches[0].clientY;drag=false},{passive:true});
+document.addEventListener('touchmove',e=>{if(x0==null)return;
 const dx=e.touches[0].clientX-x0,dy=e.touches[0].clientY-y0;
 if(!drag&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5)drag=true;
 if(drag&&e.cancelable)e.preventDefault()},{passive:false});
-row.addEventListener('touchend',e=>{if(x0==null)return;
-const dx=(e.changedTouches[0].clientX)-x0;
-if(drag){const open=dx<-40;closeSwipes();wrap.classList.toggle('open',open)}
-x0=null;y0=null;setTimeout(()=>{drag=false},0)});
-row.addEventListener('click',e=>{if(wrap.classList.contains('open')){e.stopPropagation();e.preventDefault();closeSwipes()}},true)})}
+document.addEventListener('touchend',e=>{if(x0==null||!wrap)return;
+const dx=e.changedTouches[0].clientX-x0;
+if(drag){const open=dx<-40;const w2=wrap;closeSwipes();w2.classList.toggle('open',open)}
+x0=null;wrap=null;setTimeout(()=>{drag=false},0)});
+document.addEventListener('click',e=>{const row=e.target.closest&&e.target.closest('.swipe>.row');
+if(row&&row.parentNode.classList.contains('open')){e.stopPropagation();e.preventDefault();closeSwipes()}},true)}
 function closeSwipes(){document.querySelectorAll('.swipe.open').forEach(el=>el.classList.remove('open'))}
 
 function goalsPage(){const c=ensureCur();const list=D.goals.filter(g=>g.currency===c);
@@ -757,9 +770,32 @@ ${list.length?`<div class="card" style="margin-top:14px">${list.map(g=>goalCard(
 ${D.goals.length&&!list.length?`<div class="muted" style="text-align:center">You have ${D.goals.length} goal${D.goals.length>1?'s':''} in another currency.</div>`:''}
 <p class="help">Tap a goal for the month-by-month view, to skip a month, or to edit it.</p>`}
 
-function render(){if(tab!=='activity'&&SEL)SEL=null;const v=document.getElementById('view');if(tab==='accounts')tab='home';if(typeof render._t!=='undefined'&&render._t!==tab){SEL=null}render._t=tab;v.innerHTML=tab==='home'?home():tab==='activity'?activity():tab==='reports'?reports():goalsPage();
+function morph(root,html){const tmp=document.createElement('div');tmp.innerHTML=html;morphKids(root,tmp)}
+function morphKids(oldP,newP){
+const on=[].slice.call(oldP.childNodes),nn=[].slice.call(newP.childNodes);
+const n=Math.max(on.length,nn.length);
+for(let i=0;i<n;i++){const o=on[i],w=nn[i];
+if(w===undefined){if(o&&o.parentNode===oldP)oldP.removeChild(o);continue}
+if(o===undefined){oldP.appendChild(w);continue}
+morphNode(oldP,o,w)}}
+function morphNode(parent,o,w){
+if(o.nodeType!==w.nodeType||(o.nodeType===1&&o.nodeName!==w.nodeName)){parent.replaceChild(w,o);return}
+if(o.nodeType===3||o.nodeType===8){if(o.nodeValue!==w.nodeValue)o.nodeValue=w.nodeValue;return}
+if(o.nodeType!==1)return;
+const oa=o.attributes;
+for(let i=oa.length-1;i>=0;i--){const a=oa[i];if(!w.hasAttribute(a.name))o.removeAttribute(a.name)}
+const wa=w.attributes;
+for(let i=0;i<wa.length;i++){const a=wa[i];if(o.getAttribute(a.name)!==a.value)o.setAttribute(a.name,a.value)}
+const tag=o.nodeName;
+if(tag==='INPUT'||tag==='TEXTAREA'){
+if(document.activeElement!==o&&o.value!==w.value)o.value=w.value;
+if(o.type==='checkbox'||o.type==='radio')o.checked=w.hasAttribute('checked');
+return}
+if(tag==='SELECT'){morphKids(o,w);if(document.activeElement!==o&&o.value!==w.value)o.value=w.value;return}
+morphKids(o,w)}
+function render(){if(tab!=='activity'&&SEL)SEL=null;const v=document.getElementById('view');if(tab==='accounts')tab='home';if(typeof render._t!=='undefined'&&render._t!==tab){SEL=null}render._t=tab;morph(v,tab==='home'?home():tab==='activity'?activity():tab==='reports'?reports():goalsPage());
 v.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{R.cur=b.dataset.rc;localStorage.setItem('ledger-cur',R.cur);F.acct='all';render()});
-if(R.cur==='ALL'&&tab!=='reports'){R.cur=currencies()[0]||'USD';localStorage.setItem('ledger-cur',R.cur);v.innerHTML=tab==='home'?home():tab==='activity'?activity():goalsPage()}
+if(R.cur==='ALL'&&tab!=='reports'){R.cur=currencies()[0]||'USD';localStorage.setItem('ledger-cur',R.cur);morph(v,tab==='home'?home():tab==='activity'?activity():goalsPage())}
 v.querySelectorAll('[data-recv]').forEach(b=>b.onclick=()=>{const t=D.txns.find(x=>x.id===b.dataset.recv);if(!t)return;const grp=t.gid?D.txns.filter(x=>x.gid===t.gid&&x.type==='transfer'):[t];grp.forEach(x=>{x.pending=false;x.recvDate=today()});save();render();toast('Marked received')});
 v.querySelectorAll('[data-recvd]').forEach(b=>b.onclick=()=>{const t=D.txns.find(x=>x.id===b.dataset.recvd);if(!t)return;openRecvDate(t)});
 v.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>openPerson(acct(b.dataset.person)));
@@ -2480,7 +2516,7 @@ el.innerHTML='<span style="flex:1">Version '+m[1].split(' ')[0]+' is available.<
 el.querySelector('button').onclick=()=>{location.replace(location.pathname+'?v='+Date.now())};document.body.appendChild(el)}}catch(e){}})();
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
 try{if(Array.isArray(D.recent)){const before=D.recent.length;D.recent=D.recent.filter(f=>!(f.q&&f.q.trim().length<3&&!f.cat&&f.type==='all'&&f.acct==='all'&&!f.month&&!f.year));if(D.recent.length!==before)localStorage.setItem(KEY,JSON.stringify(D))}
-migrateCats();applyTheme();render();setTimeout(()=>{try{autoRates()}catch(e){}},1500);if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
+migrateCats();applyTheme();swipeInit();render();setTimeout(()=>{try{autoRates()}catch(e){}},1500);if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
 </script>
 </body>
 </html>
