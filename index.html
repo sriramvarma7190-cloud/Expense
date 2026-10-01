@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Ledger">
 <meta name="theme-color" content="#EEF1F3">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -245,7 +248,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='16.0 · Oct 1 2026';
+const KEY='ledger-v1';const VERSION='16.1 · Oct 1 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -2561,7 +2564,12 @@ document.getElementById('menuBtn').onclick=openMenu;
 (async()=>{try{const r=await fetch(location.pathname.replace(/[^/]*$/,'')+'index.html?probe='+Date.now(),{cache:'reload'});const txt=await r.text();const m=txt.match(/VERSION='([^']+)'/);
 if(m&&m[1]!==VERSION){const el=document.createElement('div');el.style.cssText='position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));background:var(--accent);color:#fff;padding:12px 14px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center';
 el.innerHTML='<span style="flex:1">Version '+m[1].split(' ')[0]+' is available.</span><button style="background:#fff;color:var(--accent);border:0;border-radius:8px;padding:7px 12px;font:inherit;font-weight:600">Update</button>';
-el.querySelector('button').onclick=()=>{location.replace(location.pathname+'?v='+Date.now())};document.body.appendChild(el)}}catch(e){}})();
+el.querySelector('button').onclick=()=>{
+try{navigator.serviceWorker&&navigator.serviceWorker.controller&&navigator.serviceWorker.controller.postMessage('flush')}catch(e2){}
+setTimeout(()=>location.replace(location.pathname+'?v='+Date.now()),120)};document.body.appendChild(el)}}catch(e){}})();
+// offline shell — launches from cache instead of re-downloading on every open
+if('serviceWorker' in navigator&&location.protocol==='https:')
+window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{})});
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
 try{if(Array.isArray(D.recent)){const before=D.recent.length;D.recent=D.recent.filter(f=>!(f.q&&f.q.trim().length<3&&!f.cat&&f.type==='all'&&f.acct==='all'&&!f.month&&!f.year));if(D.recent.length!==before)localStorage.setItem(KEY,JSON.stringify(D))}
 migrateCats();applyTheme();swipeInit();render();setTimeout(()=>{try{autoRates()}catch(e){}},1500);if(cfgGet())fbInit().then(()=>{}).catch(()=>{});if(D.settings.pinHash&&!sessionStorage.getItem('unlocked'))showLock()}catch(e){document.getElementById('view').innerHTML='<div class="empty">Something went wrong while opening: '+esc(e.message)+'<br><br>Your data is safe. Try Menu › Backup to copy it, then reload.</div>';console.error(e)}
