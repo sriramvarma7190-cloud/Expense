@@ -128,7 +128,7 @@ nav .plus svg{width:24px;height:24px;stroke-width:2.2}
 nav .plus:active{transform:scale(.94)}
 .link{background:none;border:0;color:var(--mv);font:inherit;font-weight:600;font-size:14px;cursor:pointer;padding:0}
 input:not([type=checkbox]):not([type=radio]),select{font:inherit;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--sf);color:var(--ink);width:100%;height:46px;line-height:22px;box-sizing:border-box;-webkit-appearance:none;appearance:none}
-input[type=checkbox],input[type=radio]{-webkit-appearance:auto;appearance:auto;width:auto;height:auto;min-height:0;padding:0;margin:0;accent-color:var(--accent);transform:scale(1.25);flex:none}
+input[type=checkbox],input[type=radio]{-webkit-appearance:auto;appearance:auto;width:20px;height:20px;min-height:0;padding:0;margin:0;accent-color:var(--accent);flex:none}
 input[type=date]{text-align:left;min-height:46px;display:block}
 input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
 select{background-image:linear-gradient(45deg,transparent 50%,var(--ink3) 50%),linear-gradient(135deg,var(--ink3) 50%,transparent 50%);background-position:calc(100% - 18px) 20px,calc(100% - 13px) 20px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px}
@@ -245,7 +245,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.6 · Sep 30 2026';
+const KEY='ledger-v1';const VERSION='15.7 · Sep 30 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -572,7 +572,7 @@ bar.innerHTML='<div class="l" style="display:flex;justify-content:space-between;
 bar.onclick=()=>{NOTICEOPEN=!NOTICEOPEN;render()};
 box.appendChild(bar)}
 function home(){const b=balances();
-if(!D.accounts.length)return`<div style="padding:44px 4px;text-align:center"><div class="h1">Start with an account</div><p class="muted" style="max-width:360px;margin:10px auto 24px;line-height:1.5;font-size:14px">Add your checking, savings, and credit cards from every bank. Then log what you spend and move money between them.</p><button class="btn p" id="addAcct" style="width:auto">Add first account</button></div>`;
+if(!D.accounts.length)return`<div style="padding:44px 4px;text-align:center"><div class="h1">Start with an account</div><p class="muted" style="max-width:360px;margin:10px auto 24px;line-height:1.5;font-size:14px">Add your checking, savings, and credit cards from every bank. Then log what you spend and move money between them.</p><button class="btn p" id="addAcct" style="">Add first account</button></div>`;
 const c=ensureCur();const m=mk(today());const as=D.accounts.filter(a=>cur(a)===c);
 const assets=as.filter(a=>a.type!=='credit'&&a.type!=='loan').reduce((s,a)=>s+(isInvest(a)?(investValue(a)??holdings(a).net):b[a.id]),0),owed=as.filter(a=>a.type==='credit'||a.type==='loan').reduce((s,a)=>s-b[a.id],0),net=assets-owed;
 const spent=spentIn(m,c),earned=earnedIn(m,c),recv=receivedIn(m,c),sent=sentIn(m,c),remaining=remainingIn(m,c);
@@ -625,7 +625,7 @@ return`<div class="card" style="margin-bottom:10px;padding:12px 14px;background:
 </div>${noticeTrim()}
 ${(()=>{const gl=D.goals.filter(g=>g.currency===c);const wt=targetIn(c);
 if(!wt&&!gl.length)return`<div class="sec">Goals<span class="r"><button class="link" id="addGoalH" style="font-size:12px">Create goal</button></span></div>
-<div class="card"><div class="estate"><svg viewBox="0 0 48 48" aria-hidden="true">${EMPTYART.target}</svg><div class="et">Name a target</div><div class="eb">Say the amount and the date; the monthly figure works itself out.</div><div class="tools" style="justify-content:center;margin-top:10px"><button class="btn p" id="addGoalE" style="width:auto">Create a goal</button><button class="btn" id="setWealthE" style="width:auto">Wealth target</button></div></div></div>`;
+<div class="card"><div class="estate"><svg viewBox="0 0 48 48" aria-hidden="true">${EMPTYART.target}</svg><div class="et">Name a target</div><div class="eb">Say the amount and the date; the monthly figure works itself out.</div><div class="tools" style="justify-content:center;margin-top:10px"><button class="btn p" id="addGoalE" style="">Create a goal</button><button class="btn" id="setWealthE" style="">Wealth target</button></div></div></div>`;
 const wp=wt?project(wt,{window:+(D.settings.wWin||6),includeInvest:D.settings.wInv!==false,extra:(+(D.settings.wExtra||0))+((D.settings.wCuts||[]).reduce((a,x)=>a+(+x.v||0),0))}):null;
 return`<div class="sec">Goals<span class="r"><button class="link" id="addGoalH" style="font-size:12px">Create goal</button></span></div>
 <div class="card">${wt?`<div class="brow" id="wealthCard" style="cursor:pointer"><div class="l"><span><b>Wealth target</b> <span class="muted" style="font-size:11px">everything you own</span></span><span class="num">${wp.hit==null?'—':mLabel(wp.hit)}</span></div>
@@ -945,7 +945,7 @@ ${st.type==='credit'?`<div class="g2"><label class="field" style="margin:0"><div
 <div class="g2"><label class="field" style="margin:0"><div>Credit limit (${CUR[st.currency].sym}) <span class="muted">optional</span></div><input id="clim" class="num" inputmode="decimal" value="${esc(st.limit)}" placeholder="100000"></label><label class="field" style="margin:0"><div>APR (% a year) <span class="muted">optional</span></div><input id="capr" class="num" inputmode="decimal" value="${esc(st.apr)}" placeholder="24"></label></div>
 <label class="field"><div>0% promotion until <span class="muted">(optional)</span></div><input id="cpro" type="date" value="${st.promoUntil||''}"></label>
 <div class="g2"><label class="field" style="margin:0"><div>Minimum: floor (${CUR[st.currency].sym})</div><input id="cmf" class="num" inputmode="decimal" value="${esc(st.minFloor)}" placeholder="500"></label><label class="field" style="margin:0"><div>or % of balance</div><input id="cmp" class="num" inputmode="decimal" value="${esc(st.minPct)}" placeholder="5"></label></div>
-<label class="field" style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="cmi" style="width:auto"${st.minPlusInt?' checked':''}><span style="font-size:14px">Minimum also adds that month's interest (Amex style)</span></label>
+<label class="field" style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="cmi" style=""${st.minPlusInt?' checked':''}><span style="font-size:14px">Minimum also adds that month's interest (Amex style)</span></label>
 ${st.promoUntil&&st.promoUntil>=today()?`<div class="note in" >0% until ${dlabel(st.promoUntil,1)} — no interest until then. After that, ${st.apr?esc(st.apr)+'%':'your regular APR'} applies to whatever is left.</div>`:nv(st.apr)>0?`<div class="note mv" >Interest only applies if you don't pay the statement balance by the due date. Pay in full and it stays at zero.</div>`:''}`:''}
 ${st.type==='loan'?`<div class="g2"><label class="field"><div>Outstanding now (${CUR[st.currency].sym})</div><input id="apr" class="num" inputmode="decimal" value="${esc(st.principal)}" placeholder="1000000"></label><label class="field"><div>Interest rate (% per year)</div><input id="ar" class="num" inputmode="decimal" value="${esc(st.rate)}" placeholder="10"></label></div>
 <div class="g2"><label class="field"><div>Balance updates on day</div><select id="asd">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${st.stDay===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label><label class="field"><div>Day-count basis</div><select id="ab2"><option value="365"${st.basis===365?' selected':''}>365</option><option value="360"${st.basis===360?' selected':''}>360</option></select></label></div>
@@ -956,7 +956,7 @@ return`<div class="note mv" >EMI works out to <b class="num">${money(calc,0,st.c
 if(P>0&&R>0&&e>0){const m=monthsFor(P,R,e);return`<div class="note mv" >${m?`At ${money(e,0,st.currency)} a month this finishes in about <b>${m}</b> months (${mlabel(shiftMonth(mk(today()),m))}).`:`${money(e,0,st.currency)} doesn't cover the monthly interest — the balance would grow.`}</div>`}
 return''})()}
 <div class="g2"><label class="field"><div>EMI is paid on day</div><select id="aed">${Array.from({length:28},(_,i)=>`<option value="${i+1}"${(st.emiDay||st.stDay)===i+1?' selected':''}>${i+1}</option>`).join('')}</select></label><label class="field"><div>Outstanding as of</div><input id="asn" type="date" value="${st.since}"></label></div>
-<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="asdue" style="width:auto"${st.showDue?' checked':''}><span style="font-size:14px">Show the EMI as due on Home</span></label>
+<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="asdue" style=""${st.showDue?' checked':''}><span style="font-size:14px">Show the EMI as due on Home</span></label>
 ${nv(st.principal)>0&&nv(st.rate)>0?`<div class="note mv" ><b class="num">${money(nv(st.principal)*nv(st.rate)/100/st.basis,0,st.currency)} interest per day</b> at today's balance (${esc(st.principal)} × ${esc(st.rate)} ÷ ${st.basis*100}). Every payment lowers it from that day.</div>`:''}`:''}
 ${st.type!=='invest'&&st.type!=='loan'?`<label class="field"><div>${cr?'Balance owed when you start tracking':st.type==='held'?'Amount already with them':'Balance when you start tracking'} (${CUR[st.currency].sym})</div><input id="ao" class="num" inputmode="decimal" value="${esc(st.opening)}" placeholder="0.00"></label>`:''}
 ${edit&&b!=null&&st.type!=='invest'&&st.type!=='loan'?(()=>{const shown=cr?-b:b;const typed=String(st.bankSays==null?'':st.bankSays).replace(/[^0-9.]/g,'');const says=typed===''?NaN:nv(typed);const diff=isNaN(says)?null:Math.round((says-shown)*100)/100;
@@ -1108,7 +1108,7 @@ return`${acctField(st.sell?'Money received into':'Paid from','fr',st.accountId,s
 ${!iv.length?`<div class="note out" >No ${fc} investment accounts yet — add one from Menu › Investments.</div>`:''}
 ${inv&&usesUnits(inv)?`<div class="g2">${inv.kind==='gold'?`<label class="field"><div>Purity</div><select id="pu">${Object.entries(PURITY).map(([k,v])=>`<option value="${k}"${(st.purity||'22')===k?' selected':''}>${v.label}</option>`).join('')}</select></label>`:''}<label class="field"><div>${unitLabel(inv)[0].toUpperCase()+unitLabel(inv).slice(1)}</div><input id="un" class="num" inputmode="decimal" value="${esc(st.units)}" placeholder="0.000"></label></div>
 ${amt>0&&u>0?`<div class="note mv" >${money(amt/u,0,fc)} per ${unitLabel(inv).replace(/s$/,'')}${inv.kind==='gold'&&st.purity?` (${PURITY[st.purity||'22'].label})`:''}.</div>`:''}`:''}
-<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sell" style="width:auto"${st.sell?' checked':''}><span style="font-size:14px">I sold some — money comes back to me</span></label>`})():''}
+<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sell" style=""${st.sell?' checked':''}><span style="font-size:14px">I sold some — money comes back to me</span></label>`})():''}
 ${st.type==='transfer'?`${acctField('From','fr',st.accountId,'transfer',a=>!isPerson(a)&&!isInvest(a))}${acctField('To','to',st.toAccountId,'transfer-to',a=>a.id!==st.accountId&&!isPerson(a)&&!isInvest(a))}
 ${(()=>{const f=acct(st.accountId),t2=acct(st.toAccountId);const pp=isPerson(f)?f:(isPerson(t2)?t2:null);if(!pp)return'';
 const bal=owedTo(pp.id);const liveEl=(typeof document!=='undefined')?document.getElementById('am'):null;const amt=parseFloat(String((liveEl&&liveEl.value)||st.amount||'').replace(/[^0-9.]/g,''))||0;const c2=cur(pp);
@@ -1125,6 +1125,7 @@ ${fx()?`<label class="field"><div>Amount received in ${tc} (${CUR[tc].sym}) — 
 `:''}</div>`
 :`<div class="note mv" >${money(a,0,fc)} leaves ${esc(acct(st.accountId)?.name||'…')} and lands in ${esc(acct(st.toAccountId)?.name||'…')}. Net worth stays the same.</div>`}${st.type==='transfer'&&st.pending?'<div class="note out" >Debited now; the receiving account is credited once you mark it received.</div>':''}`
 :st.type==='invest'?'':`${st.type!=='expense'||!st.payer?acctField(st.type==='expense'?'Paid from':'Deposited to','fr',st.accountId,st.type):''}
+<div class="field"><div style="display:flex;justify-content:space-between"><span>Category</span><button class="link" id="editCats" style="font-size:12px">Edit list</button></div><div class="chips">${cats.map(c=>`<button data-c="${esc(c)}" class="${st.category===c?'on':''}" style="${st.category===c?`background:var(--${cls});border-color:var(--${cls})`:''}">${esc(c)}</button>`).join('')}</div></div>
 <button type="button" class="link" id="moreT" style="display:block;margin:2px 0 12px;font-size:13px">${st.more?"Fewer details":"More details"} › <span class="muted" style="font-size:11px">${st.type==='transfer'||st.type==='invest'?'date, note':'split, one-off, date, note'}</span></button><div id="moreBox" style="display:${st.more?"block":"none"}">${st.type==='income'?(()=>{const amt=parseFloat(String(st.amount).replace(/[^0-9.]/g,''))||0;
 const rows=(st.ito||[]).filter(r=>!!r);
 const calc=()=>{if(!rows.length)return[];
@@ -1132,7 +1133,7 @@ if(st.imode==='even'){const n=rows.filter(r=>acct(r.id)).length;const per=n?amt/
 if(st.imode==='pct'){const ids=rows.map((r,i)=>String(i));const ps=pctShares(amt,ids,i=>nv(rows[+i].pct));return rows.map((r,i)=>({...r,v:ps[String(i)]}))}
 return rows.map(r=>({...r,v:parseFloat(String(r.amt||'').replace(/[^0-9.]/g,''))||0}))};
 const cs=calc();const away=cs.reduce((a,b)=>a+b.v,0);const mine=amt-away;
-return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${st.isplit?'8px':'12px'}"><input type="checkbox" id="isp" style="width:auto;margin-top:3px"${st.isplit?' checked':''}><span style="font-size:14px;line-height:1.4">Goes to more than one account<br><span class="muted" style="font-size:11px">Salary paid into two or more of your accounts.</span></span></label>
+return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${st.isplit?'8px':'12px'}"><input type="checkbox" id="isp" style="margin-top:2px"${st.isplit?' checked':''}><span style="font-size:14px;line-height:1.4">Goes to more than one account<br><span class="muted" style="font-size:11px">Salary paid into two or more of your accounts.</span></span></label>
 ${st.isplit?`<div class="card" style="padding:12px 14px;margin-bottom:12px">
 <div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0 0 10px">${[['even','Evenly'],['pct','Percentage'],['amt','Custom']].map(([v,l])=>`<button type="button" data-im="${v}" class="${st.imode===v?'on':''}">${l}</button>`).join('')}</div>
 ${rows.map((r,i)=>`<div class="g2" style="align-items:end;margin-bottom:8px"><div class="field" style="margin:0"><div>Also into</div><button type="button" class="btn" data-ipick="${i}" style="text-align:left;font-size:14px;padding:9px 12px">${esc(acct(r.id)?.name||'Pick an account')} ›</button></div>
@@ -1148,7 +1149,7 @@ else if(mode==='pct'){const ps=pctShares(amt,sel,id=>st.pct?.[id]);sel.forEach(i
 else sel.forEach(id=>shares[id]=+(st.amt?.[id]||0))}
 const owed=Object.values(shares).reduce((x,y)=>x+y,0);const mine=Math.round((amt-owed)*100)/100;const over=owed>amt+0.005;
 const groups=(D.groups||[]).filter(g=>g.currency===fc);
-return`<label class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:${st.split?'8px':'12px'}"><input type="checkbox" id="spl" style="width:auto"${st.split?' checked':''}><span style="font-size:14px">Split this bill</span></label>
+return`<label class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:${st.split?'8px':'12px'}"><input type="checkbox" id="spl"${st.split?' checked':''}><span style="font-size:14px">Split this bill</span></label>
 ${st.split?`<div class="card" style="padding:12px 14px;margin-bottom:12px">
 
 ${groups.length?`<div class="muted" style="font-size:10px;letter-spacing:.04em;text-transform:uppercase;margin:0 0 5px">Groups</div><div class="chips" style="margin-bottom:8px">${groups.map(g=>{const on=g.members.length&&g.members.some(m=>sel.includes(m));
@@ -1189,13 +1190,14 @@ const catOn=st.category&&oneOffCats().includes(st.category);
 const hist=D.txns.filter(t=>t.type===st.type&&t.category===st.category&&cur(acct(t.accountId))===fc&&t.id!==edit?.id).map(t=>t.amount);
 const avg=hist.length?hist.reduce((a,b)=>a+b,0)/hist.length:0;const big=avg>0&&amt>avg*3;
 if(st.type==='expense'&&st.split&&(st.who||[]).filter(id=>acct(id)).length&&amt<=0.005)return'';
-return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${big&&!st.oneOff&&!catOn?'6px':'12px'}"><input type="checkbox" id="oneoff" style="width:auto;margin-top:3px"${st.oneOff||catOn?' checked':''}${catOn?' disabled':''}><span style="font-size:14px;line-height:1.4">One-off — keep it out of my averages<br><span class="muted" style="font-size:11px">${catOn?`"${esc(st.category)}" is marked one-off for every entry.`:'Still counts in your balances and reports; only excluded from the monthly average used to project your wealth target.'}</span></span></label>
+return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${big&&!st.oneOff&&!catOn?'6px':'12px'}"><input type="checkbox" id="oneoff" style="margin-top:2px"${st.oneOff||catOn?' checked':''}${catOn?' disabled':''}><span style="font-size:14px;line-height:1.4">One-off — keep it out of my averages<br><span class="muted" style="font-size:11px">${catOn?`"${esc(st.category)}" is marked one-off for every entry.`:'Still counts in your balances and reports; only excluded from the monthly average used to project your wealth target.'}</span></span></label>
 ${big&&!st.oneOff&&!catOn?`<div class="note mv" style="margin-bottom:12px">This is ${(amt/avg).toFixed(1)}× your usual ${esc(st.category)} of ${money(avg,0,fc)}. Was it a one-off? <button type="button" id="ooYes" class="link" style="font-size:13px">Yes, mark it</button></div>`:''}`})():''}
-<div class="field"><div style="display:flex;justify-content:space-between"><span>Category</span><button class="link" id="editCats" style="font-size:12px">Edit list</button></div><div class="chips">${cats.map(c=>`<button data-c="${esc(c)}" class="${st.category===c?'on':''}" style="${st.category===c?`background:var(--${cls});border-color:var(--${cls})`:''}">${esc(c)}</button>`).join('')}</div></div>`}
+`}
 ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><input id="dt" type="date" value="${st.date}"></label>${st.pending?`<label class="field"><div>Expected on</div><input id="rd" type="date" value="${st.recvDate&&st.recvDate!==st.date?st.recvDate:''}"></label>`:''}</div>${st.pending?`<div class="muted" style="font-size:11px;margin:-6px 0 12px">Leave the expected date blank if you don't know when it will land.</div>`:''}
-<label class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px"><input type="checkbox" id="pend" style="width:auto"${st.pending?' checked':''}><span style="font-size:14px">Not received yet — keep it in transit</span></label>
+<label class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px"><input type="checkbox" id="pend" style=""${st.pending?' checked':''}><span style="font-size:14px">Not received yet — keep it in transit</span></label>
 <label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Wise, Remitly, purpose…"></label>`
 :`<label class="field"><div>Date</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Where, what, who"></label>`}
+${(st.type==='expense'||st.type==='income')?'</div>':''}
 <button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 
@@ -1543,13 +1545,13 @@ const curOf=()=>st.accountIds.length?cur(acct(st.accountIds[0])):(typeof R!=='un
 const modeOf=()=>nv(st.perMonth)>0?'monthly':'deadline';
 const valid=()=>st.name.trim()&&st.accountIds.length&&st.accountIds.every(id=>cur(acct(id))===curOf())&&(modeOf()==='deadline'?(nv(st.total)>0&&st.end&&st.end>=st.start):nv(st.perMonth)>0);
 sheet={title:edit?'Edit goal':'New savings goal',body(){const c=curOf()||'USD';return`<label class="field"><div>Goal name</div><input id="gn" value="${esc(st.name)}" placeholder="Emergency fund"></label>
-<div class="field"><div>Counts money moved into</div><div class="card">${savable.map(a=>`<label class="row" style="padding:10px 14px;gap:10px"><input type="checkbox" data-ga="${a.id}" style="width:auto"${st.accountIds.includes(a.id)?' checked':''}>${logoEl(a,28)}<div class="main"><div class="t" style="font-size:14px">${esc(a.name)}</div><div class="s">${a.type==='held'?'with '+esc(a.bank||''):TYPES[a.type]} · ${cur(a)}</div></div></label>`).join('')}</div>${st.accountIds.some(id=>cur(acct(id))!==c)?'<div class="out" style="font-size:12px;margin-top:6px">Pick accounts in one currency only.</div>':''}</div>
+<div class="field"><div>Counts money moved into</div><div class="card">${savable.map(a=>`<label class="row" style="padding:10px 14px;gap:10px"><input type="checkbox" data-ga="${a.id}" style=""${st.accountIds.includes(a.id)?' checked':''}>${logoEl(a,28)}<div class="main"><div class="t" style="font-size:14px">${esc(a.name)}</div><div class="s">${a.type==='held'?'with '+esc(a.bank||''):TYPES[a.type]} · ${cur(a)}</div></div></label>`).join('')}</div>${st.accountIds.some(id=>cur(acct(id))!==c)?'<div class="out" style="font-size:12px;margin-top:6px">Pick accounts in one currency only.</div>':''}</div>
 ${(()=>{const bal=balances();const curBal=st.accountIds.reduce((a,id)=>a+(bal[id]||0),0);const tot=nv(st.total)||0;const pm=nv(st.perMonth)||0;const base=st.includeExisting?Math.max(0,curBal):0;const need=Math.max(0,tot-base);const left=st.end?monthsBetween(mk(today())>st.start?mk(today()):st.start,st.end).length:0;
 const deadline=tot>0&&st.end&&!pm;
 return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="g2" style="align-items:end"><label class="field" style="margin:0"><div>Reach (${CUR[c].sym})</div><input id="gt" class="num" inputmode="decimal" value="${esc(st.total)}" placeholder="Amount"></label><label class="field" style="margin:0"><div>by</div><input id="ge" type="month" value="${st.end}" min="${st.start}"></label></div>
 <div class="muted" style="text-align:center;margin:10px 0 6px;font-size:12px">— or —</div>
 <label class="field" style="margin:0"><div>Save every month (${CUR[c].sym})</div><input id="gp" class="num" inputmode="decimal" value="${esc(st.perMonth)}" placeholder="Amount"></label></div>
-${tot>0?`<label class="field" style="display:flex;align-items:flex-start;gap:10px"><input type="checkbox" id="gie" style="width:auto;margin-top:3px"${st.includeExisting?' checked':''}><span style="font-size:14px;line-height:1.4">Count what's already in ${st.accountIds.length?'these accounts':'the accounts'} <span class="muted">(${money(curBal,0,c)} now)</span><br><span class="muted" style="font-size:12px">${st.includeExisting?`So you only need ${money(need,0,c)} more.`:`The full ${money(tot,0,c)} must be new money from ${mlabel(st.start)}.`}</span></span></label>`:''}
+${tot>0?`<label class="field" style="display:flex;align-items:flex-start;gap:10px"><input type="checkbox" id="gie" style="margin-top:2px"${st.includeExisting?' checked':''}><span style="font-size:14px;line-height:1.4">Count what's already in ${st.accountIds.length?'these accounts':'the accounts'} <span class="muted">(${money(curBal,0,c)} now)</span><br><span class="muted" style="font-size:12px">${st.includeExisting?`So you only need ${money(need,0,c)} more.`:`The full ${money(tot,0,c)} must be new money from ${mlabel(st.start)}.`}</span></span></label>`:''}
 ${deadline&&left?`<div class="note mv" ><b class="num">${money(need/left,0,c)} per month</b> for ${left} month${left===1?'':'s'} to reach ${money(tot,0,c)} by ${mlabel(st.end)}. Skipping a month revises this automatically.</div>`:pm>0?`<div class="note mv" >${money(pm,0,c)} every month${tot>0?`, until ${money(tot,0,c)} is reached${pm?` (about ${Math.ceil(need/pm)} month${Math.ceil(need/pm)===1?'':'s'})`:''}`:st.end?` until ${mlabel(st.end)}`:', no end date'}.</div>`:tot>0&&!st.end?'<div class="note out" >Add a date, or a monthly amount instead.</div>':''}
 <label class="field"><div>Starts counting from</div><input id="gs" type="month" value="${st.start}"></label>
 ${pm>0?`<div class="field"><div>When I skip a month</div><div class="seg" style="margin:0;grid-template-columns:1fr 1fr"><button data-sm="catchup" class="${st.skipMode==='catchup'?'on':''}">Carry it forward</button><button data-sm="drop" class="${st.skipMode==='drop'?'on':''}">Drop it</button></div></div>`:''}`})()}
@@ -1618,7 +1620,7 @@ if(st.imode==='even'){const n=rows.filter(r=>acct(r.id)).length;const per=n?amt/
 if(st.imode==='pct'){const ids=rows.map((r,i)=>String(i));const ps=pctShares(amt,ids,i=>nv(rows[+i].pct));return rows.map((r,i)=>({...r,v:ps[String(i)]}))}
 return rows.map(r=>({...r,v:nv(r.amt)}))};
 const cs=calc();const away=cs.reduce((a,b)=>a+b.v,0);const mine=amt-away;
-return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${st.isplit?'8px':'12px'}"><input type="checkbox" id="risp" style="width:auto;margin-top:3px"${st.isplit?' checked':''}><span style="font-size:14px;line-height:1.4">Goes to more than one account</span></label>
+return`<label class="field" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${st.isplit?'8px':'12px'}"><input type="checkbox" id="risp" style="margin-top:2px"${st.isplit?' checked':''}><span style="font-size:14px;line-height:1.4">Goes to more than one account</span></label>
 ${st.isplit?`<div class="card" style="padding:12px 14px;margin-bottom:12px">
 <div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0 0 10px">${[['even','Evenly'],['pct','Percentage'],['amt','Custom']].map(([v,l])=>`<button type="button" data-rim="${v}" class="${st.imode===v?'on':''}">${l}</button>`).join('')}</div>
 ${rows.map((r,i)=>`<div class="g2" style="align-items:end;margin-bottom:8px"><label class="field" style="margin:0"><div>Also into</div><select data-ripick="${i}">${['<option value="">Choose…</option>'].concat(others.map(a=>`<option value="${a.id}"${r.id===a.id?' selected':''}>${esc(a.name)}</option>`)).join('')}</select></label>
@@ -1631,10 +1633,10 @@ ${amt>0?`<div class="note ${mine>=-0.005?'mv':'out'}">${esc(acct(st.accountId)?.
 ${st.type==='transfer'?`<div class="g2"><label class="field"><div>From</div><select id="rf">${opts(st.accountId)}</select></label><label class="field"><div>To</div><select id="rt"><option value="">Choose…</option>${opts(st.toAccountId)}</select></label></div>`:`<label class="field"><div>${st.type==='expense'?'Paid from':'Deposited to'}</div><select id="rf">${opts(st.accountId)}</select></label>
 <label class="field"><div>Category</div><select id="rc"><option value="">None</option>${catsOf(st.type==='income'?'income':'expense',c).map(k=>`<option${st.category===k?' selected':''}>${esc(k)}</option>`).join('')}</select></label>`}
 ${st.type==='transfer'&&st.toAccountId&&cur(acct(st.toAccountId))!==c?'<div class="note mv" >Different currencies — when it comes due you\'ll enter the amount received that day.</div>':''}
-${st.type==='expense'?`<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="rspl" style="width:auto"${st.rsplit?' checked':''}><span style="font-size:14px">Split it every month</span></label>
+${st.type==='expense'?`<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="rspl" style=""${st.rsplit?' checked':''}><span style="font-size:14px">Split it every month</span></label>
 ${st.rsplit?`<div class="chips" style="margin:-4px 0 12px">${peopleIn(c).map(a=>`<button type="button" data-rw="${a.id}" style="${st.rwho.includes(a.id)?'background:var(--accent);border-color:var(--accent);color:#fff':''}">${esc(pname(a))}${st.rwho.includes(a.id)?' ✓':''}</button>`).join('')||'<span class="muted" style="font-size:13px">Add people from a split bill first.</span>'}</div><div class="muted" style="font-size:12px;margin:-6px 0 12px">When it's due, the Add button opens it pre-split evenly — adjust before saving.</div>`:''}`:''}
 ${st.type==='expense'?FLEXBLOCK():''}
-${edit?`<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ract" style="width:auto"${st.active?' checked':''}><span style="font-size:14px">Active</span></label>`:''}
+${edit?`<label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ract" style=""${st.active?' checked':''}><span style="font-size:14px">Active</span></label>`:''}
 <button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save':'Add recurring'}</button>${edit?'<button class="btn d" id="del">Delete recurring</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{st.every=b.dataset.rev;renderSheet()});
@@ -1695,7 +1697,7 @@ if(err&&err===today())return`<div class="note out" style="margin:0 0 12px;font-s
 if(a.rateAt&&age<=1)return`<div class="muted" style="font-size:11px;margin-bottom:10px">Rate updated ${age===0?'today':'yesterday'} automatically${a.cal?.ratio?` with your ${((a.cal.ratio-1)*100).toFixed(1)}% local premium`:''}.</div>`;
 if(a.rateAt&&age>=7)return`<div class="note out" style="margin:0 0 12px;font-size:12px">Rate is ${age} days old. <button class="link" id="goldRetry" style="font-size:12px">Update now</button></div>`;
 return''})():''}
-${rateRows?`<div class="card" style="padding:12px 14px;margin-bottom:12px">${rateRows}<div class="tools" style="margin-top:10px"><button class="btn p" id="saveRate" style="width:auto">Save rate</button>${a.kind==='gold'?`<button class="btn" id="fetchRate" style="width:auto"${busy?' disabled':''}>${busy?'Fetching…':'Fetch today\'s rate'}</button>`:''}</div>${msg?`<div class="muted" style="margin-top:8px;font-size:12px">${esc(msg)}</div>`:''}</div>`:''}
+${rateRows?`<div class="card" style="padding:12px 14px;margin-bottom:12px">${rateRows}<div class="tools" style="margin-top:10px"><button class="btn p" id="saveRate" style="">Save rate</button>${a.kind==='gold'?`<button class="btn" id="fetchRate" style=""${busy?' disabled':''}>${busy?'Fetching…':'Fetch today\'s rate'}</button>`:''}</div>${msg?`<div class="muted" style="margin-top:8px;font-size:12px">${esc(msg)}</div>`:''}</div>`:''}
 ${txs.length?`<div class="sec" style="margin-top:4px">History</div><div class="card">${txs.map(t=>txnRow(t,1)).join('')}</div>`:emptyState('coins','Nothing recorded yet','Use the Invest option on the + button to add your first purchase.')}
 <button class="btn" id="editAcct" style="margin-top:14px">Edit investment</button>`},
 wire(){const $=id=>document.getElementById(id);
@@ -1809,7 +1811,7 @@ ${promoOn(a)&&s.promoDays<=90&&s.total>0?`<div class="note out" style="margin-to
 ${s.util!=null?`<div class="card" style="padding:12px 14px;margin-top:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:14px"><span>Credit used</span><b class="num">${s.util.toFixed(1)}% of ${f(a.limit)}</b></div><div class="track" style="margin-top:8px"><i style="width:${Math.min(100,s.util)}%;background:${s.util>30?'var(--out)':'var(--in)'}"></i></div><div class="muted" style="font-size:11px;margin-top:4px">Under 30% is generally considered healthy.</div></div>`:''}
 <div class="card" style="padding:12px 14px;margin-top:12px"><div class="l" style="display:flex;justify-content:space-between;font-size:13px"><span class="muted">Statement closed</span><span>${dlabel(s.lastClose,1)}</span></div><div class="l" style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px"><span class="muted">Next closes</span><span>${dlabel(s.nextClose,1)}</span></div><div class="l" style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px"><span class="muted">Payment due</span><span>${dlabel(s.due,1)}</span></div></div>
 ${rows.length?`<div class="sec" style="margin-top:4px">Recent</div><div class="card">${rows.map(t=>txnRow(t,1)).join('')}</div>`:''}
-<div class="tools" style="margin-top:12px"><button class="btn p" id="payCard" style="width:auto">Record a payment</button><button class="btn" id="editAcct" style="width:auto">Edit card</button></div>`},
+<div class="tools" style="margin-top:12px"><button class="btn p" id="payCard" style="">Record a payment</button><button class="btn" id="editAcct" style="">Edit card</button></div>`},
 wire(){const $=id=>document.getElementById(id);const s=cardState(a);
 $('payCard').onclick=()=>{const from=D.accounts.find(x=>cur(x)===c&&['checking','savings'].includes(x.type));openTxn(null,{type:'transfer',accountId:from?.id,toAccountId:a.id,amount:s.remaining>0?s.remaining:undefined,note:a.name+' payment'})};
 $('editAcct').onclick=()=>openAccount(a);
@@ -1863,7 +1865,7 @@ return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class
 ${line(both,'Both together')}</div>`})():''}
 <div class="sec" style="margin-top:4px">Statement day ${a.stDay||1}<span class="r">interest added to the balance monthly</span></div>
 ${L.payments.length?`<div class="card"><table class="tbl"><tr class="tot"><td>Payment</td><td>Interest</td><td>Principal</td></tr>${L.payments.slice(0,24).map(pp=>`<tr><td>${dlabel(pp.d)}<div class="muted num" style="font-size:11px">${f(pp.amt)}</div></td><td class="num out">${f(pp.interest)}</td><td class="num in">${f(pp.principal)}</td></tr>`).join('')}</table></div>`:'<div class="empty" style="padding:20px 0">No payments yet. Record one as a transfer from your bank to this loan.</div>'}
-<div class="tools" style="margin-top:12px"><button class="btn p" id="payNow" style="width:auto">Record a payment</button><button class="btn" id="editAcct" style="width:auto">Edit loan</button></div>`},
+<div class="tools" style="margin-top:12px"><button class="btn p" id="payNow" style="">Record a payment</button><button class="btn" id="editAcct" style="">Edit loan</button></div>`},
 wire(){const $=id=>document.getElementById(id);
 $('lxm')&&($('lxm').oninput=e=>{extraM=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._lxt);window._lxt=setTimeout(()=>renderSheet(),500)});
 $('lxl')&&($('lxl').oninput=e=>{lumpAmt=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._llt);window._llt=setTimeout(()=>renderSheet(),500)});
@@ -1897,7 +1899,7 @@ return`<div class="muted" style="margin-bottom:12px;line-height:1.4">Save the pe
 ${ppl.length?`<div class="sec" style="padding-top:0">People</div><div class="card">${ppl.map(pp=>{const b=owedTo(pp.id);
 return`<div class="row" data-pedit="${pp.id}"><div class="main"><div class="t">${esc(pname(pp))} <span class="muted" style="font-size:11px">${c}</span></div><div class="s">${Math.abs(b)<0.005?'settled up':(b>0?'owes you '+money(b,0,c):'you owe '+money(-b,0,c))}</div></div><span class="muted">›</span></div>`}).join('')}</div>`:''}
 ${gs.length?`<div class="sec">Groups</div><div class="card">${gs.map(g=>`<div class="row" data-gedit=""${g.id}"><div class="main"><div class="t">${esc(g.name)}</div><div class="s">${g.members.map(m=>esc(pname(acct(m)))).filter(Boolean).join(', ')||'no one yet'}</div></div><span class="muted">›</span></div>`).join('')}</div>`:(ppl.length?'':'<div class="empty" style="padding:20px 0">No people or groups yet.</div>')}
-<div class="tools" style="margin-top:12px"><button class="btn p" id="addGrp" style="width:auto">Create group</button><button class="btn" id="addPer" style="width:auto">Add a person</button></div>`},
+<div class="tools" style="margin-top:12px"><button class="btn p" id="addGrp" style="">Create group</button><button class="btn" id="addPer" style="">Add a person</button></div>`},
 wire(){document.querySelectorAll('[data-gedit]').forEach(el=>el.onclick=()=>openGroupEdit(D.groups.find(g=>g.id===el.dataset.gedit),c,onDone));
 document.querySelectorAll('[data-pedit]').forEach(el=>el.onclick=()=>{pushSheet();openPersonEdit(acct(el.dataset.pedit),c,onDone)});
 document.getElementById('addGrp').onclick=()=>openGroupEdit(null,c,onDone);
@@ -1941,7 +1943,7 @@ return`<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:
 <div class="muted" style="font-size:12px;margin-bottom:8px">If you have given up on being repaid, write it off. It becomes a real expense today and their balance clears — your history stays.</div>
 ${woOpen?`<div class="g2" style="align-items:end"><label class="field" style="margin:0"><div>Write off (${CUR[c].sym})</div><input id="woA" class="num" inputmode="decimal" value="${esc(woAmt||String(bal))}"></label><label class="field" style="margin:0"><div>Note <span class="muted">optional</span></div><input id="woN" value="${esc(woNote)}" placeholder="Gave up chasing"></label></div>
 ${(()=>{const v=parseFloat(woAmt||bal)||0;const left=bal-v;return v>0&&left>0.005?`<div class="muted num" style="font-size:12px;margin-bottom:8px">${money(left,0,c)} would still be owing.</div>`:''})()}
-<div class="tools"><button class="btn d" id="woOk" style="width:auto;margin:0">Write it off</button><button class="btn" id="woCancel" style="width:auto">Cancel</button></div>`
+<div class="tools"><button class="btn d" id="woOk" style="width:auto;margin:0">Write it off</button><button class="btn" id="woCancel" style="">Cancel</button></div>`
 :`<button class="btn" id="woStart">Write off what is owed</button>`}</div>`})()}
 <button class="btn" id="editP" style="margin-top:12px">Edit person</button>`},
 wire(){const $=id=>document.getElementById(id);
@@ -2277,7 +2279,7 @@ ${ideas.length?`<div class="muted" style="font-size:11px;margin:-4px 4px 8px;lin
 :'<div class="empty" style="padding:20px 16px;font-size:13px;text-align:center">Nothing to suggest yet<div class="muted" style="font-size:12px;margin-top:4px">Once you have a month of expenses, this ranks what you could trim and what it would save.</div></div>'}
 `:''}
 ${currencies().length>1?rateLine('USD side'):''}
-<div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="width:auto">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
+<div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
 wire(){const $=id=>document.getElementById(id);
 $('wtOk')&&($('wtOk').onclick=()=>{const v=numVal($('wt'))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();openWealth()});
 $('wt')&&($('wt').oninput=e=>e.target.value=e.target.value.replace(/[^0-9.]/g,''));
@@ -2416,9 +2418,9 @@ return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Last backup</span><span class="muted">${m.at?dlabel(new Date(m.at).toISOString().slice(0,10))+' '+new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'never'}</span></div>
 <div class="l" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span class="muted">Encryption</span><span class="muted">${pass?'passphrase set':'none — readable by the project owner'}</span></div></div>
 <label class="field"><div>Passphrase <span class="muted">(optional — encrypts before it leaves this phone)</span></div><input id="pw" type="password" placeholder="${pass?'••••••••':'Leave blank for no encryption'}"></label>
-<label class="field" style="display:flex;align-items:center;gap:8px;margin:-6px 0 6px"><input type="checkbox" id="pwRem" style="width:auto"${localStorage.getItem(PW_KEY)?' checked':''}><span style="font-size:14px">Remember it on this phone</span></label>
+<label class="field" style="display:flex;align-items:center;gap:8px;margin:-6px 0 6px"><input type="checkbox" id="pwRem" style=""${localStorage.getItem(PW_KEY)?' checked':''}><span style="font-size:14px">Remember it on this phone</span></label>
 <div class="muted" style="font-size:11px;margin:0 0 12px">${pass?'Nobody but you can open the backup — including the project owner. Lose the passphrase and the cloud copy is unrecoverable; your device copy is unaffected.':'Without a passphrase the backup is stored as plain text that the project owner could read.'}</div>
-<div class="tools" style="margin:0 0 10px"><button class="btn p" id="pushBtn" style="width:auto">Back up now</button><button class="btn" id="pullBtn" style="width:auto">Restore from cloud</button></div>
+<div class="tools" style="margin:0 0 10px"><button class="btn p" id="pushBtn" style="">Back up now</button><button class="btn" id="pullBtn" style="">Restore from cloud</button></div>
 <button class="btn" id="outBtn">Sign out</button>
 <button class="btn d" id="delAcc" style="margin-top:10px">Delete my account and backup</button>
 ${!cfgIsBuiltIn()?'<button class="btn d" id="resetCfg" style="margin-top:10px">Remove cloud setup</button>':''}
@@ -2460,7 +2462,7 @@ $('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup f
 if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
 
 // ---------- menu / appearance / pin ----------
-function openTax(){sheet={title:'Income tax slab',body(){return`<div class="field"><div>Income tax slab <span class="muted">(for after-tax figures)</span></div><select id="slab">${[['','Not set'],['5','5%'],['10','10%'],['15','15%'],['20','20%'],['25','25%'],['30','30%']].map(([v,l])=>`<option value="${v}"${String(D.settings.slab||'')===v?' selected':''}>${l}</option>`).join('')}</select><label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:14px"><input type="checkbox" id="atax" style="width:auto"${D.settings.afterTax?' checked':''}><span>Show interest after tax</span></label><div class="muted" style="font-size:12px;margin:10px 0 14px">Used to show what income is worth after tax.</div><button class="btn p" id="ok">Done</button>`},wire(){const $=id=>document.getElementById(id);
+function openTax(){sheet={title:'Income tax slab',body(){return`<div class="field"><div>Income tax slab <span class="muted">(for after-tax figures)</span></div><select id="slab">${[['','Not set'],['5','5%'],['10','10%'],['15','15%'],['20','20%'],['25','25%'],['30','30%']].map(([v,l])=>`<option value="${v}"${String(D.settings.slab||'')===v?' selected':''}>${l}</option>`).join('')}</select><label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:14px"><input type="checkbox" id="atax" style=""${D.settings.afterTax?' checked':''}><span>Show interest after tax</span></label></div><div class="muted" style="font-size:12px;margin:10px 0 14px">Used to show what income is worth after tax.</div><button class="btn p" id="ok">Done</button>`},wire(){const $=id=>document.getElementById(id);
 $('slab').onchange=e=>{D.settings.slab=e.target.value;save()};
 $('atax').onchange=e=>{D.settings.afterTax=e.target.checked;save()};
 $('ok').onclick=()=>{save();openSettings()};document.getElementById('cancel').onclick=()=>openSettings()}};renderSheet()}
