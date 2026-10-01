@@ -248,10 +248,18 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='16.1 · Oct 1 2026';
+const KEY='ledger-v1';const VERSION='16.2 · Oct 1 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
-function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
+function save(){clearTimeout(saveT);saveT=null;localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
+// A UI toggle must not cost a full serialise of every transaction on the main
+// thread — that stall is what reads as the app reloading. Defer the write, skip
+// the re-render behind an open sheet, and flush before anything can lose it.
+let saveT=null;
+function saveSoon(){clearTimeout(saveT);saveT=setTimeout(()=>{saveT=null;
+localStorage.setItem(KEY,JSON.stringify(D));if(!sheet)render();try{cloudQueue()}catch(e){}},700)}
+function flushSave(){if(saveT===null)return;clearTimeout(saveT);saveT=null;
+localStorage.setItem(KEY,JSON.stringify(D));try{cloudQueue()}catch(e){}}
 D.settings=D.settings||{};
 const ACCENTS=[['#2F4BC9','Indigo'],['#0F766E','Teal'],['#7E22CE','Plum'],['#C2410C','Ember'],['#166534','Forest'],['#B91C1C','Cherry'],['#334155','Slate']];
 function applyTheme(){const t=D.settings.theme||'auto';const dark=t==='dark'||(t==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=dark?'dark':'light';document.body.dataset.theme=dark?'dark':'light';document.documentElement.style.setProperty('--accent',D.settings.accent||'#2F4BC9');document.querySelector('meta[name=theme-color]').content=dark?'#0E1319':'#EEF1F3'}
@@ -876,7 +884,7 @@ renderSheet()}
 let STACK=[],GY=null,GD=0;
 function pushSheet(){if(sheet)STACK.push(sheet)}
 function backSheet(){if(STACK.length){sheet=STACK.pop();renderSheet()}else closeSheet()}
-function closeSheet(){STACK=[];sheet=null;renderSheet()}
+function closeSheet(){STACK=[];sheet=null;flushSave();renderSheet();render()}
 function blurActive(){const a=document.activeElement;if(a&&a.blur&&a.tagName!=='BODY')a.blur()}
 (function(){const isTap=e=>{const t=e.target&&e.target.closest?e.target.closest('button,[data-c],[data-who],[data-payer],[data-ac],[data-sm],[data-t],input[type=checkbox],input[type=radio],label'):null;return t&&!(t.tagName==='INPUT'&&['text','number','search','email','password','tel','url','date'].includes((t.type||'').toLowerCase()))};
 ['pointerdown','mousedown','touchstart'].forEach(ev=>document.addEventListener(ev,e=>{if(isTap(e))blurActive()},true));
@@ -2168,9 +2176,9 @@ return n===0?`Appears on ${dlabel(b.due,1)}, the due date.`:`Appears from ${dlab
 <div class="muted" style="font-size:11px;margin-top:12px">"Work it out" uses your statement: if the last one wasn't paid by its due date, it's treated as carried.</div>`},
 wire(){const ca=document.getElementById('cmAdd');ca&&(ca.onclick=()=>{pushSheet();openAccount({type:'credit',currency:ensureCur()},true)});
 document.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.cm.split('|');const a=acct(id);
-if(m==='auto')delete a.carry;else a.carry=(m==='carry');localStorage.setItem(KEY,JSON.stringify(D));reopen(openCardModes)});
+if(m==='auto')delete a.carry;else a.carry=(m==='carry');saveSoon();reopen(openCardModes)});
 document.querySelectorAll('[data-cr]').forEach(b=>b.onclick=()=>{const[id,n]=b.dataset.cr.split('|');const a=acct(id);
-a.remindDays=+n;localStorage.setItem(KEY,JSON.stringify(D));reopen(openCardModes)});
+a.remindDays=+n;saveSoon();reopen(openCardModes)});
 }};renderSheet()}
 function openAssets(){const assets=D.accounts.filter(a=>isInvest(a)&&!isDep(a));
 sheet={title:'What counts in the target',body(){const ex=D.settings.wExclude||[];const c=baseCur();
@@ -2190,10 +2198,10 @@ wire(){document.querySelectorAll('[data-amode]').forEach(b=>b.onclick=()=>{const
 if(m==='cash'){D.settings.wInv=false;D.settings.wMode='cash'}
 else if(m==='all'){D.settings.wInv=true;D.settings.wExclude=[];D.settings.wMode='all'}
 else{D.settings.wInv=true;D.settings.wMode='custom'}
-localStorage.setItem(KEY,JSON.stringify(D));reopen(openAssets)});
+saveSoon();reopen(openAssets)});
 document.querySelectorAll('[data-atog]').forEach(el=>el.onclick=()=>{const id=el.dataset.atog;D.settings.wInv=true;D.settings.wMode='custom';D.settings.wExclude=D.settings.wExclude||[];
 const i=D.settings.wExclude.indexOf(id);if(i>=0)D.settings.wExclude.splice(i,1);else D.settings.wExclude.push(id);
-localStorage.setItem(KEY,JSON.stringify(D));reopen(openAssets)});
+saveSoon();reopen(openAssets)});
 }};renderSheet()}
 function openRateSheet(){const lt=lastTransferFx();let busy=false,msg='';
 sheet={title:'Exchange rate',body(){const mode=fxSource();const used=fxRate();
@@ -2213,8 +2221,8 @@ ${msg?`<div class="muted" style="font-size:11px;margin-top:8px">${esc(msg)}</div
 ${mode==='manual'?`<label class="field" style="margin-top:12px"><div>Your rate (₹ per $)</div><input id="rsMan" class="num" inputmode="decimal" value="${D.settings.fx||used}"></label>`:''}
 <div class="muted" style="font-size:11px;margin-top:12px;line-height:1.45">This rate converts your dollar accounts wherever the app shows a combined figure — the All view in Reports, your wealth target, and net worth. Single-currency views never convert anything.</div>`},
 wire(){const $=id=>document.getElementById(id);
-document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{D.settings.fxMode=b.dataset.fxm;msg='';save();reopen(openRateSheet)});
-$('rsMan')&&($('rsMan').onchange=e=>{const v=nv(e.target.value);if(v>0){D.settings.fx=v;D.settings.fxMode='manual';save();reopen(openRateSheet)}});
+document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{D.settings.fxMode=b.dataset.fxm;msg='';saveSoon();reopen(openRateSheet)});
+$('rsMan')&&($('rsMan').onchange=e=>{const v=nv(e.target.value);if(v>0){D.settings.fx=v;D.settings.fxMode='manual';saveSoon();reopen(openRateSheet)}});
 $('rsFetch').onclick=async()=>{busy=true;msg='';renderSheet();
 try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();D.settings.fxSrc=fetchFx.src||'';D.settings.fxAtTime=new Date().toISOString();delete D.settings.fxErr;msg=`Updated to ₹${D.settings.fxLive} from ${D.settings.fxSrc}.`}
 catch(e){D.settings.fxErr=today();msg="Couldn't reach a rate service. Your existing rate is unchanged."}
@@ -2306,19 +2314,19 @@ ${ideas.length?`<div class="muted" style="font-size:11px;margin:-4px 4px 8px;lin
 ${currencies().length>1?rateLine('USD side'):''}
 <div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
 wire(){const $=id=>document.getElementById(id);
-$('wtOk')&&($('wtOk').onclick=()=>{const v=numVal($('wt'))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();reopen(openWealth)});
+$('wtOk')&&($('wtOk').onclick=()=>{const v=numVal($('wt'))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;saveSoon();reopen(openWealth)});
 $('wt')&&($('wt').oninput=e=>e.target.value=e.target.value.replace(/[^0-9.]/g,''));
-document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dataset.win;save();reopen(openWealth)});
-['scTog','scTog2'].forEach(id=>{const b=document.getElementById(id);b&&(b.onclick=e=>{e.stopPropagation();st.wScaled=!st.wScaled;save();reopen(openWealth)})});
-document.querySelectorAll('[data-frow]').forEach(b=>b.onclick=()=>{st.wOpen=st.wOpen===b.dataset.frow?'':b.dataset.frow;save();reopen(openWealth)});
-document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{st.wInv=b.dataset.inv==='true';save();reopen(openWealth)});
-$('wx')&&($('wx').oninput=e=>{const v=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._wxt);window._wxt=setTimeout(()=>{st.wExtra=nv(v);save();reopen(openWealth)},500)},$('wx').onchange=e=>{st.wExtra=nv(e.target.value);save();reopen(openWealth)});
+document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dataset.win;saveSoon();reopen(openWealth)});
+['scTog','scTog2'].forEach(id=>{const b=document.getElementById(id);b&&(b.onclick=e=>{e.stopPropagation();st.wScaled=!st.wScaled;saveSoon();reopen(openWealth)})});
+document.querySelectorAll('[data-frow]').forEach(b=>b.onclick=()=>{st.wOpen=st.wOpen===b.dataset.frow?'':b.dataset.frow;saveSoon();reopen(openWealth)});
+document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{st.wInv=b.dataset.inv==='true';saveSoon();reopen(openWealth)});
+$('wx')&&($('wx').oninput=e=>{const v=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._wxt);window._wxt=setTimeout(()=>{st.wExtra=nv(v);saveSoon();reopen(openWealth)},500)},$('wx').onchange=e=>{st.wExtra=nv(e.target.value);saveSoon();reopen(openWealth)});
 document.querySelectorAll('[data-cutk]').forEach(b=>b.onclick=()=>{st.wCuts=st.wCuts||[];const k=b.dataset.cutk;const v=+b.dataset.cutv;
 const i=st.wCuts.findIndex(x=>x.k===k);if(i>=0){st.wCuts.splice(i,1);toast('Removed from your extra')}else{st.wCuts.push({k,v});toast('Counted in your extra')}
-save();reopen(openWealth)});
+saveSoon();reopen(openWealth)});
 $('pickAssets')&&($('pickAssets').onclick=openAssets);
 $('rateOpen')&&($('rateOpen').onclick=()=>{pushSheet();openRateSheet()});
-$('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;save();reopen(openWealth)});
+$('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;saveSoon();reopen(openWealth)});
 $('manageRec')&&($('manageRec').onclick=()=>{pushSheet();openRecurring()});
 $('cardMode')&&($('cardMode').onclick=()=>{pushSheet();openCardModes()});
 $('ooReview')&&($('ooReview').onclick=()=>{markBack('wealth');const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)).sort((a,b)=>b.date.localeCompare(a.date));
@@ -2326,14 +2334,14 @@ if(oo.length){const c=cur(acct(oo[0].accountId));R.cur=c;localStorage.setItem('l
 F={q:'',acct:'all',type:'expense',cat:null,month:null,cur:null,year:null,oneOff:true};sheet=null;tab='activity';render();window.scrollTo(0,0)});
 $('ooHelp')&&($('ooHelp').onclick=()=>toast('Open a transaction and tick "One-off", or mark a whole category in Menu › Categories'));
 
-document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';save();reopen(openWealth)});
-$('wfx')&&($('wfx').onchange=e=>{const v=nv(e.target.value);if(v>0){st.fx=v;st.fxMode='manual';save();reopen(openWealth)}});
-$('fxRetry')&&($('fxRetry').onclick=async()=>{try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;save();reopen(openWealth);toast('Rate updated')}catch(e){D.settings.fxErr=today();save();toast("Still couldn't reach the rate service")}});
-$('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';save();reopen(openWealth);
+document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';saveSoon();reopen(openWealth)});
+$('wfx')&&($('wfx').onchange=e=>{const v=nv(e.target.value);if(v>0){st.fx=v;st.fxMode='manual';saveSoon();reopen(openWealth)}});
+$('fxRetry')&&($('fxRetry').onclick=async()=>{try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;saveSoon();reopen(openWealth);toast('Rate updated')}catch(e){D.settings.fxErr=today();save();toast("Still couldn't reach the rate service")}});
+$('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';saveSoon();reopen(openWealth);
 try{const r=await fetchFx('USD','INR');st.fxLive=+r.toFixed(2);st.fxLiveAt=today();st.fxMsg=`Market rate ₹${st.fxLive} per $.${lastTransferFx()?` You last converted at ₹${lastTransferFx()}.`:''}`}
 catch(e){st.fxMsg="Couldn't reach a rate service — set it yourself instead."}
-st.fxBusy=false;save();reopen(openWealth)});
-$('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;delete st.wTargetCur;save();reopen(openWealth)});
+st.fxBusy=false;saveSoon();reopen(openWealth)});
+$('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;delete st.wTargetCur;saveSoon();reopen(openWealth)});
 $('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wTargetCur;delete st.wExtra;delete st.wCuts;save();sheet=null;render()});
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
@@ -2399,14 +2407,32 @@ const k=await keyFrom(passphrase,salt);const ct=await crypto.subtle.encrypt({nam
 return{enc:true,salt:b64(salt),iv:b64(iv),data:b64(ct)}}
 async function decryptBlob(o,passphrase){const k=await keyFrom(passphrase,unb64(o.salt));
 const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},k,unb64(o.data));return dec.decode(pt)}
-async function cloudPush(silent){const cfg=cfgGet();if(!cfg||!FBuser)return;if(syncBusy)return;syncBusy=true;
-try{const{db,F}=await fbInit();const text=backupText();const payload=pass?await encryptBlob(text,pass):{enc:false,data:text};
-await F.setDoc(F.doc(db,'ledgers',FBuser.uid),{...payload,updatedAt:Date.now(),version:VERSION});
-syncSet({at:Date.now(),uid:FBuser.uid});if(!silent)toast('Backed up to your Google account')}
+async function cloudPush(silent,force){const cfg=cfgGet();if(!cfg||!FBuser)return;if(syncBusy)return;syncBusy=true;
+const nA=D.accounts.length,nT=D.txns.length;
+try{const{db,F}=await fbInit();
+// an empty device must never be able to flatten a cloud copy that has data
+if(!force&&nA===0&&nT===0){const cur=await F.getDoc(F.doc(db,'ledgers',FBuser.uid));
+const m=cur.exists()?cur.data():null;
+if(m&&((m.nAcc||0)>0||(m.nTxn||0)>0)){PUSHBLOCK=m;
+if(!silent)toast('Stopped — this device is empty and the cloud has '+(m.nTxn||0)+' transactions');
+return}}
+const text=backupText();const payload=pass?await encryptBlob(text,pass):{enc:false,data:text};
+const rec={...payload,updatedAt:Date.now(),version:VERSION,nAcc:nA,nTxn:nT};
+await F.setDoc(F.doc(db,'ledgers',FBuser.uid),rec);
+// a rolling history, so one bad push is never the end of it
+try{await F.setDoc(F.doc(db,'ledgers',FBuser.uid,'versions',String(rec.updatedAt)),rec);
+const old=await F.getDocs(F.query(F.collection(db,'ledgers',FBuser.uid,'versions'),F.orderBy('updatedAt','desc')));
+for(const x of old.docs.slice(KEEPVERS))await F.deleteDoc(x.ref)}catch(e){}
+syncSet({at:rec.updatedAt,uid:FBuser.uid});if(!silent)toast('Backed up to your Google account')}
 catch(e){if(!silent)toast('Sync failed: '+(e.message||'unknown'))}
 finally{syncBusy=false;if(sheet&&sheet.cloud)renderSheet()}}
-async function cloudPull(){const{db,F}=await fbInit();if(!FBuser)throw new Error('Sign in first');
-const snap=await F.getDoc(F.doc(db,'ledgers',FBuser.uid));if(!snap.exists())throw new Error('Nothing saved in the cloud yet');
+const KEEPVERS=10;let PUSHBLOCK=null,VERS=null;
+async function cloudVersions(){try{const{db,F}=await fbInit();if(!FBuser)return[];
+const snap=await F.getDocs(F.query(F.collection(db,'ledgers',FBuser.uid,'versions'),F.orderBy('updatedAt','desc')));
+return snap.docs.map(x=>({id:x.id,at:x.data().updatedAt,nAcc:x.data().nAcc,nTxn:x.data().nTxn}))}catch(e){return[]}}
+async function cloudPull(ver){const{db,F}=await fbInit();if(!FBuser)throw new Error('Sign in first');
+const snap=await F.getDoc(ver?F.doc(db,'ledgers',FBuser.uid,'versions',String(ver)):F.doc(db,'ledgers',FBuser.uid));
+if(!snap.exists())throw new Error('Nothing saved in the cloud yet');
 const o=snap.data();let text;
 if(o.enc){if(!pass)throw new Error('Enter your passphrase first');text=await decryptBlob(o,pass)}else text=o.data;
 const parsed=JSON.parse(text);if(parsed.app!=='ledger')throw new Error("That doesn't look like a Ledger backup");
@@ -2445,7 +2471,13 @@ return`<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class
 <label class="field"><div>Passphrase <span class="muted">(optional — encrypts before it leaves this phone)</span></div><input id="pw" type="password" placeholder="${pass?'••••••••':'Leave blank for no encryption'}"></label>
 <label class="field" style="display:flex;align-items:center;gap:8px;margin:-6px 0 6px"><input type="checkbox" id="pwRem" style=""${localStorage.getItem(PW_KEY)?' checked':''}><span style="font-size:14px">Remember it on this phone</span></label>
 <div class="muted" style="font-size:11px;margin:0 0 12px">${pass?'Nobody but you can open the backup — including the project owner. Lose the passphrase and the cloud copy is unrecoverable; your device copy is unaffected.':'Without a passphrase the backup is stored as plain text that the project owner could read.'}</div>
-<div class="tools" style="margin:0 0 10px"><button class="btn p" id="pushBtn" style="">Back up now</button><button class="btn" id="pullBtn" style="">Restore from cloud</button></div>
+${PUSHBLOCK?`<div class="note out" style="margin:0 0 10px">This device has nothing in it, and the cloud copy has ${PUSHBLOCK.nTxn||0} transactions. Backing up was stopped so it cannot be overwritten. Restore first.</div>`:''}
+<button class="btn p" id="pullBtn" style="margin-bottom:14px">Restore from cloud</button>
+${(VERS&&VERS.length>1)?`<div class="muted" style="font-size:11px;margin:0 0 4px">Earlier copies</div><div class="card" style="margin-bottom:14px">${VERS.slice(1).map(v=>`<div class="row" data-ver="${v.id}"><div class="main"><div class="t" style="font-size:14px">${esc(new Date(v.at).toLocaleString())}</div><div class="s">${v.nTxn||0} transaction${v.nTxn===1?'':'s'} · ${v.nAcc||0} account${v.nAcc===1?'':'s'}</div></div><span class="muted">\u203a</span></div>`).join('')}</div>`:''}
+<div style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
+<div class="muted" style="font-size:11px;margin-bottom:6px">Backing up replaces the cloud copy with what is on this phone.</div>
+<button class="btn" id="pushBtn" style="">Back up now</button></div>
+<div style="height:14px"></div>
 <button class="btn" id="outBtn">Sign out</button>
 <button class="btn d" id="delAcc" style="margin-top:10px">Delete my account and backup</button>
 ${!cfgIsBuiltIn()?'<button class="btn d" id="resetCfg" style="margin-top:10px">Remove cloud setup</button>':''}
@@ -2473,7 +2505,16 @@ $('inBtn')&&($('inBtn').onclick=async()=>{try{await fbSignIn();renderSheet();toa
 $('pw')&&($('pw').oninput=e=>{pass=e.target.value||null;if(pass&&localStorage.getItem(PW_KEY)!==null)localStorage.setItem(PW_KEY,pass)});
 $('pwRem')&&($('pwRem').onchange=e=>{if(e.target.checked){if(!pass)return toast('Type the passphrase first'),renderSheet();localStorage.setItem(PW_KEY,pass);toast('Saved on this phone')}else{localStorage.removeItem(PW_KEY);toast('Forgotten — you will type it each session')}renderSheet()});
 $('outBtn')&&($('outBtn').onclick=async()=>{try{await fbSignOut();renderSheet()}catch(e){toast('Error: '+(e.message||''))}});
-$('pushBtn')&&($('pushBtn').onclick=async()=>{if(!pass&&!confirm('No passphrase set — the backup will be stored unencrypted and the project owner could read it. Continue?'))return;await cloudPush()});
+$('pushBtn')&&($('pushBtn').onclick=async()=>{if(!pass&&!confirm('No passphrase set — the backup will be stored unencrypted and the project owner could read it. Continue?'))return;
+const cur=(VERS&&VERS[0])||null;
+if(cur&&!confirm(`Replace the cloud copy?\n\nIn the cloud: ${cur.nTxn||0} transactions, saved ${new Date(cur.at).toLocaleString()}.\nOn this phone: ${D.txns.length} transactions.\n\nThe previous ${KEEPVERS} copies are kept.`))return;
+PUSHBLOCK=null;await cloudPush();VERS=await cloudVersions();if(sheet&&sheet.cloud)renderSheet()});
+document.querySelectorAll('#sheet [data-ver]').forEach(r=>r.onclick=async()=>{
+try{const{parsed,updatedAt}=await cloudPull(r.dataset.ver);
+if(!confirm(`Restore the copy from ${new Date(updatedAt).toLocaleString()}?\n\n${parsed.accounts.length} accounts, ${parsed.txns.length} transactions.\n\nThis replaces what is on the phone now.`))return;
+D={accounts:parsed.accounts,txns:parsed.txns,budgets:parsed.budgets||{},cats:parsed.cats||{},goals:parsed.goals||[],groups:parsed.groups||[],recurring:parsed.recurring||[],settings:{...(parsed.settings||{}),pinHash:D.settings.pinHash}};
+migrateCats();applyTheme();sheet=null;save();toast('Restored that copy')}catch(e){toast(e.message||'Could not read that copy')}});
+if(FBuser&&VERS===null){VERS=[];cloudVersions().then(v=>{VERS=v;if(sheet&&sheet.cloud)renderSheet()})}
 $('pullBtn')&&($('pullBtn').onclick=async()=>{try{const{parsed,updatedAt}=await cloudPull();
 const mine=syncMeta().at||0;const newer=updatedAt>mine;
 if(!confirm(`Replace everything on this device with the cloud copy?\n\nCloud saved ${new Date(updatedAt).toLocaleString()}${newer?'':' — older than your last backup here'}.\n${parsed.accounts.length} accounts, ${parsed.txns.length} transactions.`))return;
@@ -2511,9 +2552,9 @@ function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.th
 <div class="muted" style="margin-bottom:16px">Used for transfers, the + button, links and charts.</div>
 <div class="field"><div>Bank logos</div><div class="seg" style="margin:0;grid-template-columns:1fr 1fr">${[['mark','Brand mark'],['icon','Website icon']].map(([v,l])=>`<button data-ls="${v}" class="${(D.settings.logoStyle||'mark')===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="muted">Brand mark: clean white symbol on the bank's color. Website icon: the bank's own full-color app icon.</div>`},
-wire(){document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{D.settings.theme=b.dataset.th;applyTheme();save();reopen(openAppearance)});document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{D.settings.accent=b.dataset.ac;applyTheme();save();reopen(openAppearance)});document.querySelectorAll('[data-ls]').forEach(b=>b.onclick=()=>{D.settings.logoStyle=b.dataset.ls;save();reopen(openAppearance)});
-const sl=document.getElementById('slab');sl&&(sl.onchange=e=>{D.settings.slab=e.target.value;save();reopen(openAppearance)});
-const at=document.getElementById('atax');at&&(at.onchange=e=>{D.settings.afterTax=e.target.checked;save();reopen(openAppearance)})}};renderSheet()}
+wire(){document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{D.settings.theme=b.dataset.th;applyTheme();saveSoon();reopen(openAppearance)});document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{D.settings.accent=b.dataset.ac;applyTheme();saveSoon();reopen(openAppearance)});document.querySelectorAll('[data-ls]').forEach(b=>b.onclick=()=>{D.settings.logoStyle=b.dataset.ls;saveSoon();reopen(openAppearance)});
+const sl=document.getElementById('slab');sl&&(sl.onchange=e=>{D.settings.slab=e.target.value;saveSoon();reopen(openAppearance)});
+const at=document.getElementById('atax');at&&(at.onchange=e=>{D.settings.afterTax=e.target.checked;saveSoon();reopen(openAppearance)})}};renderSheet()}
 async function sha(s){if(!(window.crypto&&crypto.subtle)){toast('PIN needs the app to be opened from its https link');throw new Error('no crypto')}const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('ledger:'+s));return[...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function openPin(){const has=!!D.settings.pinHash;let step=has?'verify':'new',first='';
 sheet={title:has?'PIN lock':'Set a PIN',body(){return`<div class="muted" style="margin-bottom:10px;line-height:1.4">${has?'Enter your current PIN to change or remove it.':'A 4–6 digit code asked for when the app opens. Keeps casual eyes out; it is not bank-grade security.'}</div><input id="pinIn" class="num" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="${step==='confirm'?'Enter it again':step==='verify'?'Current PIN':'New PIN'}" style="font-size:24px;letter-spacing:8px;text-align:center"><div id="pinMsg" class="muted" style="margin:8px 0;min-height:16px"></div><button class="btn p" id="ok">${step==='verify'?'Continue':step==='confirm'?'Save PIN':'Next'}</button>${has&&step==='verify'?'<button class="btn d" id="rm">Remove PIN</button>':''}`},
@@ -2539,16 +2580,28 @@ if(F.month===was)F.month=now;
 R.year=+d.slice(0,4);
 try{render()}catch(e){}
 try{autoRates()}catch(e){}}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)sessionStorage.setItem('hiddenAt',Date.now());else{if(D.settings.pinHash&&Date.now()-(+sessionStorage.getItem('hiddenAt')||0)>5*60*1000&&document.getElementById('lock').hidden)showLock();dayRoll()}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){flushSave();sessionStorage.setItem('hiddenAt',Date.now())}else{if(D.settings.pinHash&&Date.now()-(+sessionStorage.getItem('hiddenAt')||0)>5*60*1000&&document.getElementById('lock').hidden)showLock();dayRoll()}});
+window.addEventListener('pagehide',flushSave);
+window.addEventListener('beforeunload',flushSave);
 window.addEventListener('pageshow',dayRoll);
 window.addEventListener('focus',dayRoll);
 window.addEventListener('popstate',()=>{if(sheet){closeSheet();return}if(BACK)goBack()});
 
 // ---------- backup ----------
-function openBackup(){sheet={title:'Backup & move',body(){return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Copies everything — accounts, transactions, goals, categories, settings — as one block of text. Paste it into a new version or another device to restore.</div><div class="tools" style="margin:0"><button class="btn" id="bkCopy">Copy everything</button><button class="btn" id="bkPaste">Paste &amp; restore</button><button class="btn" id="bkFile">Save as file</button></div>`},
-wire(){document.getElementById('bkCopy').onclick=copyBackup;document.getElementById('bkPaste').onclick=openRestore;document.getElementById('bkFile').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([backupText()],{type:'application/json'}));a.download=`ledger-backup-${today()}.json`;a.click()}}};renderSheet()}
+function openBackup(){sheet={title:'Backup & move',body(){const age=exportAge();return`${(age===null||age>14)?`<div class="note out" style="margin:0 0 12px">${age===null?'You have never saved a copy off this phone.':'Your last saved copy is '+age+' days old.'} A copy in Files or Notes survives anything that happens to the app or the cloud.</div>`:`<div class="note mv" style="margin:0 0 12px">Last saved copy: ${age===0?'today':age+' day'+(age===1?'':'s')+' ago'}.</div>`}
+<div class="muted" style="line-height:1.45;margin-bottom:12px">Copies everything — accounts, transactions, goals, categories, settings — as one block of text. Paste it into a new version or another device to restore.</div><div class="tools" style="margin:0"><button class="btn" id="bkCopy">Copy everything</button><button class="btn" id="bkPaste">Paste &amp; restore</button><button class="btn" id="bkFile">Save as file</button></div>`},
+wire(){document.getElementById('bkCopy').onclick=copyBackup;document.getElementById('bkPaste').onclick=openRestore;
+document.getElementById('bkFile').onclick=async()=>{const txt=backupText(),name=`ledger-backup-${today()}.json`;
+// a blob download does nothing inside an iOS home-screen app — hand it to the
+// share sheet instead, so Files, Mail and Notes are all reachable
+try{const f=new File([txt],name,{type:'application/json'});
+if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});markExported();return}}
+catch(e){if(e&&e.name==='AbortError')return}
+const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;a.click();markExported()}}};renderSheet()}
+function markExported(){D.settings.lastExport=Date.now();save();toast('Saved — keep it somewhere you can find it')}
+const exportAge=()=>{const t=D.settings.lastExport;return t?Math.floor((Date.now()-t)/86400000):null};
 const backupText=()=>JSON.stringify({app:'ledger',version:1,exported:new Date().toISOString(),accounts:D.accounts,txns:D.txns,budgets:D.budgets||{},cats:D.cats||{},goals:D.goals||[],groups:D.groups||[],recurring:D.recurring||[],settings:D.settings||{}});
-async function copyBackup(){const txt=backupText();try{await navigator.clipboard.writeText(txt);toast('Copied — paste it into the new version')}catch{
+async function copyBackup(){const txt=backupText();try{await navigator.clipboard.writeText(txt);D.settings.lastExport=Date.now();save();toast('Copied — paste it into the new version')}catch{
 sheet={title:'Copy everything',body(){return`<div class="muted" style="margin-bottom:10px">Tap the text, Select All, then Copy.</div><textarea id="bkTxt" readonly style="width:100%;height:180px;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;padding:10px">${esc(txt)}</textarea>`},wire(){const t=document.getElementById('bkTxt');t.onclick=()=>t.select()}};renderSheet()}}
 function openRestore(){sheet={title:'Paste & restore',body(){return`<div class="muted" style="margin-bottom:10px;line-height:1.4">Paste the text you copied from the other version. This replaces everything currently in this app.</div><textarea id="rsTxt" placeholder='{"app":"ledger", …}' style="width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;padding:10px"></textarea><div id="rsInfo" class="muted" style="margin:10px 0"></div><button class="btn p" id="ok" disabled>Restore</button><div style="margin-top:10px"><button class="btn" id="rsFile">Or choose a backup file</button><input type="file" id="rsFileIn" accept=".json,application/json" hidden></div>`},
 wire(){const $=id=>document.getElementById(id);let parsed=null;
