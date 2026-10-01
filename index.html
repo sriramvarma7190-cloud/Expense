@@ -245,7 +245,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.9 · Oct 1 2026';
+const KEY='ledger-v1';const VERSION='16.0 · Oct 1 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -883,7 +883,7 @@ const inner=`<div class="grip"></div><div class="head">${STACK.length?`<button i
 let box=el.querySelector('.sheet');
 // patch in place only while it is the same sheet; a different sheet gets fresh
 // nodes so a click still in flight cannot land on the new screen's handlers
-const same=(SHELL===sheet);
+const same=(SHELL===sheet)||SAMESCREEN;
 if(!box||!same){
 el.innerHTML=`<div class="overlay" id="ov"><div class="sheet${sheet.tall?' tall':''}">${inner}</div></div>`;
 SHELL=sheet;box=el.querySelector('.sheet');
@@ -906,6 +906,10 @@ if(inp.value&&document.activeElement!==inp)inp.value=groupNum(inp.value,c);
 const prev=inp.oninput;
 wireNum(inp,c,()=>{if(prev)prev.call(inp,{target:{value:String(inp.value).replace(/[^0-9.]/g,''),selectionStart:null}})})})})()}
 let SHELL=null;
+// a handler that re-opens the screen it is already on wants a redraw, not a new
+// screen: patch the panel in place so nothing re-animates and scroll is kept
+let SAMESCREEN=false;
+const reopen=fn=>{SAMESCREEN=true;try{fn()}finally{SAMESCREEN=false}};
 
 let FOCUSED2=0;
 function openAccount(edit,isNew){if(isNew||edit&&!edit.id){const pre=edit||{};edit=null;var PRE=pre}const P=typeof PRE!=='undefined'?PRE:{};const st={name:edit?.name||'',bank:edit?.bank||'',type:edit?.type||P.type||'checking',currency:edit?.currency||P.currency||'USD',logoUrl:edit?.logoUrl||'',showLogo:!!(edit&&edit.logoUrl),opening:edit?String(Math.abs(edit.opening||0)):'',bankSays:'',kind:edit?.kind||P.kind||'gold',rate:edit?.rate!=null?String(edit.rate):'',principal:edit?.principal!=null?String(edit.principal):'',emi:edit?.emi!=null&&edit.emi?String(edit.emi):'',months:edit?.months?String(edit.months):'',emiDay:edit?.emiDay||0,stDay:edit?.stDay||P.stDay||1,basis:edit?.basis||365,since:edit?.since||today(),showDue:edit?.showDue!==false,init:JSON.parse(JSON.stringify(edit?.init||{byPurity:{}})),rates:JSON.parse(JSON.stringify(edit?.rates||{})),rateAt:edit?.rateAt||'',busy:false,fmsg:'',show18:false,state:edit?.state||'',priceUnit:edit?.priceUnit||'10g',cal:edit?.cal||null,calIn:'',area:edit?.area??'',areaUnit:edit?.areaUnit||'sqft',pin:edit?.pin||'',apprPct:edit?.apprPct??'',monthly:edit?.monthly?String(edit.monthly):'',closeDay:edit?.closeDay||1,dueDay:edit?.dueDay||1,limit:edit?.limit?String(edit.limit):'',apr:edit?.apr?String(edit.apr):'',promoUntil:edit?.promoUntil||'',minFloor:edit?.minFloor?String(edit.minFloor):'',minPct:edit?.minPct?String(edit.minPct):'',minPlusInt:!!edit?.minPlusInt,termMonths:edit?.termMonths?String(edit.termMonths):'',comp:edit?.comp??4,payout:edit?.payout??0,day:edit?.day||1};
@@ -1697,7 +1701,7 @@ sheet={title:'Investments',body(){return`${currencies().length>1?`<div class="se
 ${list.length?`<div class="card"><div class="brow" style="background:var(--bg)"><div class="l"><span><b>Total value</b></span><span class="num"><b>${money(tot,0,c)}</b></span></div><div class="muted num" style="font-size:11px;margin-top:4px">Invested ${money(cost,0,c)} · <span style="color:${tot-cost>=0?'var(--in)':'var(--out)'}">${tot-cost>=0?'+':'−'}${money(Math.abs(tot-cost),0,c)}${cost>0?` (${((tot-cost)/cost*100).toFixed(1)}%)`:''}</span></div></div>
 ${list.map(a=>accountRow(a,b[a.id])).join('')}</div>`:`<div class="empty" style="padding:24px 0">No ${c} investments yet.<br><span class="muted" style="font-size:13px">Add gold, a mutual fund, a bond or FD — then record purchases with the Invest option on +.</span></div>`}
 <button class="btn p" id="addInv" style="margin-top:12px">Add investment</button>`},
-wire(){document.querySelectorAll('[data-ic]').forEach(bt=>bt.onclick=()=>{R.cur=bt.dataset.ic;localStorage.setItem('ledger-cur',R.cur);openInvest()});
+wire(){document.querySelectorAll('[data-ic]').forEach(bt=>bt.onclick=()=>{R.cur=bt.dataset.ic;localStorage.setItem('ledger-cur',R.cur);reopen(openInvest)});
 document.querySelectorAll('#sheet [data-acct]').forEach(el=>el.onclick=()=>openInvestDetail(acct(el.dataset.acct)));
 document.getElementById('addInv').onclick=()=>openAccount({type:'invest',currency:c,kind:'gold'},true)}};renderSheet()}
 function openInvestDetail(a){const c=cur(a);let busy=false,msg='';
@@ -1807,7 +1811,7 @@ const tot=list.reduce((x,a)=>x+loanState(a).out,0),daily=list.reduce((x,a)=>x+lo
 sheet={title:'Loans',body(){return`${currencies().length>1?`<div class="seg" style="grid-template-columns:repeat(${currencies().length},1fr)">${currencies().map(k=>`<button data-lc="${k}" class="${c===k?'on':''}">${k}</button>`).join('')}</div>`:''}
 ${list.length?`<div class="card"><div class="brow" style="background:var(--bg)"><div class="l"><span><b>Total owed</b></span><span class="num"><b class="out">${money(tot,0,c)}</b></span></div><div class="muted num" style="font-size:11px;margin-top:4px">Interest building at ${money(daily,0,c)} per day</div></div>${list.map(a=>accountRow(a,b[a.id])).join('')}</div>`:`<div class="empty" style="padding:24px 0">No ${c} loans yet.</div>`}
 <button class="btn p" id="addLoan" style="margin-top:12px">Add loan</button>`},
-wire(){document.querySelectorAll('[data-lc]').forEach(bt=>bt.onclick=()=>{R.cur=bt.dataset.lc;localStorage.setItem('ledger-cur',R.cur);openLoans()});
+wire(){document.querySelectorAll('[data-lc]').forEach(bt=>bt.onclick=()=>{R.cur=bt.dataset.lc;localStorage.setItem('ledger-cur',R.cur);reopen(openLoans)});
 document.querySelectorAll('#sheet [data-acct]').forEach(el=>el.onclick=()=>openLoanDetail(acct(el.dataset.acct)));
 document.getElementById('addLoan').onclick=()=>openAccount({type:'loan',currency:c,stDay:9},true)}};renderSheet()}
 function openCardDetail(a){const c=cur(a);
@@ -2161,9 +2165,9 @@ return n===0?`Appears on ${dlabel(b.due,1)}, the due date.`:`Appears from ${dlab
 <div class="muted" style="font-size:11px;margin-top:12px">"Work it out" uses your statement: if the last one wasn't paid by its due date, it's treated as carried.</div>`},
 wire(){const ca=document.getElementById('cmAdd');ca&&(ca.onclick=()=>{pushSheet();openAccount({type:'credit',currency:ensureCur()},true)});
 document.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{const[id,m]=b.dataset.cm.split('|');const a=acct(id);
-if(m==='auto')delete a.carry;else a.carry=(m==='carry');localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
+if(m==='auto')delete a.carry;else a.carry=(m==='carry');localStorage.setItem(KEY,JSON.stringify(D));reopen(openCardModes)});
 document.querySelectorAll('[data-cr]').forEach(b=>b.onclick=()=>{const[id,n]=b.dataset.cr.split('|');const a=acct(id);
-a.remindDays=+n;localStorage.setItem(KEY,JSON.stringify(D));openCardModes()});
+a.remindDays=+n;localStorage.setItem(KEY,JSON.stringify(D));reopen(openCardModes)});
 }};renderSheet()}
 function openAssets(){const assets=D.accounts.filter(a=>isInvest(a)&&!isDep(a));
 sheet={title:'What counts in the target',body(){const ex=D.settings.wExclude||[];const c=baseCur();
@@ -2183,10 +2187,10 @@ wire(){document.querySelectorAll('[data-amode]').forEach(b=>b.onclick=()=>{const
 if(m==='cash'){D.settings.wInv=false;D.settings.wMode='cash'}
 else if(m==='all'){D.settings.wInv=true;D.settings.wExclude=[];D.settings.wMode='all'}
 else{D.settings.wInv=true;D.settings.wMode='custom'}
-localStorage.setItem(KEY,JSON.stringify(D));openAssets()});
+localStorage.setItem(KEY,JSON.stringify(D));reopen(openAssets)});
 document.querySelectorAll('[data-atog]').forEach(el=>el.onclick=()=>{const id=el.dataset.atog;D.settings.wInv=true;D.settings.wMode='custom';D.settings.wExclude=D.settings.wExclude||[];
 const i=D.settings.wExclude.indexOf(id);if(i>=0)D.settings.wExclude.splice(i,1);else D.settings.wExclude.push(id);
-localStorage.setItem(KEY,JSON.stringify(D));openAssets()});
+localStorage.setItem(KEY,JSON.stringify(D));reopen(openAssets)});
 }};renderSheet()}
 function openRateSheet(){const lt=lastTransferFx();let busy=false,msg='';
 sheet={title:'Exchange rate',body(){const mode=fxSource();const used=fxRate();
@@ -2206,8 +2210,8 @@ ${msg?`<div class="muted" style="font-size:11px;margin-top:8px">${esc(msg)}</div
 ${mode==='manual'?`<label class="field" style="margin-top:12px"><div>Your rate (₹ per $)</div><input id="rsMan" class="num" inputmode="decimal" value="${D.settings.fx||used}"></label>`:''}
 <div class="muted" style="font-size:11px;margin-top:12px;line-height:1.45">This rate converts your dollar accounts wherever the app shows a combined figure — the All view in Reports, your wealth target, and net worth. Single-currency views never convert anything.</div>`},
 wire(){const $=id=>document.getElementById(id);
-document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{D.settings.fxMode=b.dataset.fxm;msg='';save();openRateSheet()});
-$('rsMan')&&($('rsMan').onchange=e=>{const v=nv(e.target.value);if(v>0){D.settings.fx=v;D.settings.fxMode='manual';save();openRateSheet()}});
+document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{D.settings.fxMode=b.dataset.fxm;msg='';save();reopen(openRateSheet)});
+$('rsMan')&&($('rsMan').onchange=e=>{const v=nv(e.target.value);if(v>0){D.settings.fx=v;D.settings.fxMode='manual';save();reopen(openRateSheet)}});
 $('rsFetch').onclick=async()=>{busy=true;msg='';renderSheet();
 try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();D.settings.fxSrc=fetchFx.src||'';D.settings.fxAtTime=new Date().toISOString();delete D.settings.fxErr;msg=`Updated to ₹${D.settings.fxLive} from ${D.settings.fxSrc}.`}
 catch(e){D.settings.fxErr=today();msg="Couldn't reach a rate service. Your existing rate is unchanged."}
@@ -2299,19 +2303,19 @@ ${ideas.length?`<div class="muted" style="font-size:11px;margin:-4px 4px 8px;lin
 ${currencies().length>1?rateLine('USD side'):''}
 <div class="tools" style="margin-top:12px"><button class="btn" id="wtEdit" style="">Change target</button><button class="btn d" id="wtClear" style="width:auto;margin:0">Remove target</button></div>`},
 wire(){const $=id=>document.getElementById(id);
-$('wtOk')&&($('wtOk').onclick=()=>{const v=numVal($('wt'))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();openWealth()});
+$('wtOk')&&($('wtOk').onclick=()=>{const v=numVal($('wt'))||0;if(!(v>0))return toast('Enter an amount');st.wTarget=v;save();reopen(openWealth)});
 $('wt')&&($('wt').oninput=e=>e.target.value=e.target.value.replace(/[^0-9.]/g,''));
-document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dataset.win;save();openWealth()});
-['scTog','scTog2'].forEach(id=>{const b=document.getElementById(id);b&&(b.onclick=e=>{e.stopPropagation();st.wScaled=!st.wScaled;save();openWealth()})});
-document.querySelectorAll('[data-frow]').forEach(b=>b.onclick=()=>{st.wOpen=st.wOpen===b.dataset.frow?'':b.dataset.frow;save();openWealth()});
-document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{st.wInv=b.dataset.inv==='true';save();openWealth()});
-$('wx')&&($('wx').oninput=e=>{const v=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._wxt);window._wxt=setTimeout(()=>{st.wExtra=nv(v);save();openWealth()},500)},$('wx').onchange=e=>{st.wExtra=nv(e.target.value);save();openWealth()});
+document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{st.wWin=+b.dataset.win;save();reopen(openWealth)});
+['scTog','scTog2'].forEach(id=>{const b=document.getElementById(id);b&&(b.onclick=e=>{e.stopPropagation();st.wScaled=!st.wScaled;save();reopen(openWealth)})});
+document.querySelectorAll('[data-frow]').forEach(b=>b.onclick=()=>{st.wOpen=st.wOpen===b.dataset.frow?'':b.dataset.frow;save();reopen(openWealth)});
+document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>{st.wInv=b.dataset.inv==='true';save();reopen(openWealth)});
+$('wx')&&($('wx').oninput=e=>{const v=e.target.value.replace(/[^0-9.]/g,'');clearTimeout(window._wxt);window._wxt=setTimeout(()=>{st.wExtra=nv(v);save();reopen(openWealth)},500)},$('wx').onchange=e=>{st.wExtra=nv(e.target.value);save();reopen(openWealth)});
 document.querySelectorAll('[data-cutk]').forEach(b=>b.onclick=()=>{st.wCuts=st.wCuts||[];const k=b.dataset.cutk;const v=+b.dataset.cutv;
 const i=st.wCuts.findIndex(x=>x.k===k);if(i>=0){st.wCuts.splice(i,1);toast('Removed from your extra')}else{st.wCuts.push({k,v});toast('Counted in your extra')}
-save();openWealth()});
+save();reopen(openWealth)});
 $('pickAssets')&&($('pickAssets').onclick=openAssets);
 $('rateOpen')&&($('rateOpen').onclick=()=>{pushSheet();openRateSheet()});
-$('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;save();openWealth()});
+$('advToggle')&&($('advToggle').onclick=()=>{st.wAdvice=!st.wAdvice;save();reopen(openWealth)});
 $('manageRec')&&($('manageRec').onclick=()=>{pushSheet();openRecurring()});
 $('cardMode')&&($('cardMode').onclick=()=>{pushSheet();openCardModes()});
 $('ooReview')&&($('ooReview').onclick=()=>{markBack('wealth');const oo=D.txns.filter(t=>t.type==='expense'&&isOneOff(t)).sort((a,b)=>b.date.localeCompare(a.date));
@@ -2319,14 +2323,14 @@ if(oo.length){const c=cur(acct(oo[0].accountId));R.cur=c;localStorage.setItem('l
 F={q:'',acct:'all',type:'expense',cat:null,month:null,cur:null,year:null,oneOff:true};sheet=null;tab='activity';render();window.scrollTo(0,0)});
 $('ooHelp')&&($('ooHelp').onclick=()=>toast('Open a transaction and tick "One-off", or mark a whole category in Menu › Categories'));
 
-document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';save();openWealth()});
-$('wfx')&&($('wfx').onchange=e=>{const v=nv(e.target.value);if(v>0){st.fx=v;st.fxMode='manual';save();openWealth()}});
-$('fxRetry')&&($('fxRetry').onclick=async()=>{try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;save();openWealth();toast('Rate updated')}catch(e){D.settings.fxErr=today();save();toast("Still couldn't reach the rate service")}});
-$('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';save();openWealth();
+document.querySelectorAll('[data-fxm]').forEach(b=>b.onclick=()=>{st.fxMode=b.dataset.fxm;st.fxMsg='';save();reopen(openWealth)});
+$('wfx')&&($('wfx').onchange=e=>{const v=nv(e.target.value);if(v>0){st.fx=v;st.fxMode='manual';save();reopen(openWealth)}});
+$('fxRetry')&&($('fxRetry').onclick=async()=>{try{const r=await fetchFx('USD','INR');D.settings.fxLive=+r.toFixed(2);D.settings.fxLiveAt=today();delete D.settings.fxErr;save();reopen(openWealth);toast('Rate updated')}catch(e){D.settings.fxErr=today();save();toast("Still couldn't reach the rate service")}});
+$('wfxFetch')&&($('wfxFetch').onclick=async()=>{st.fxBusy=true;st.fxMsg='';save();reopen(openWealth);
 try{const r=await fetchFx('USD','INR');st.fxLive=+r.toFixed(2);st.fxLiveAt=today();st.fxMsg=`Market rate ₹${st.fxLive} per $.${lastTransferFx()?` You last converted at ₹${lastTransferFx()}.`:''}`}
 catch(e){st.fxMsg="Couldn't reach a rate service — set it yourself instead."}
-st.fxBusy=false;save();openWealth()});
-$('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;delete st.wTargetCur;save();openWealth()});
+st.fxBusy=false;save();reopen(openWealth)});
+$('wtEdit')&&($('wtEdit').onclick=()=>{delete st.wTarget;delete st.wTargetCur;save();reopen(openWealth)});
 $('wtClear')&&($('wtClear').onclick=()=>{delete st.wTarget;delete st.wTargetCur;delete st.wExtra;delete st.wCuts;save();sheet=null;render()});
 document.getElementById('cancel').onclick=()=>{sheet=null;render()}}};renderSheet()}
 
@@ -2451,7 +2455,7 @@ let depth=0,end=-1;for(let k=i;k<raw.length;k++){if(raw[k]==='{')depth++;else if
 if(end<0)throw new Error('Unclosed { } block');
 let body=raw.slice(i,end+1).replace(/,\s*}/g,'}').replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":').replace(/'/g,'"');
 const o=JSON.parse(body);if(!o.apiKey||!o.projectId)throw new Error('Missing apiKey or projectId');
-localStorage.setItem(CFG_KEY,JSON.stringify(o));toast('Setup saved');openCloud()}
+localStorage.setItem(CFG_KEY,JSON.stringify(o));toast('Setup saved');reopen(openCloud)}
 catch(e){$('cfgMsg').textContent="Couldn't read that config ("+(e.message||'')+"). Paste the whole snippet from Firebase — comments and extra lines are fine."}});
 document.querySelectorAll('[data-am2]').forEach(b=>b.onclick=()=>{mode=b.dataset.am2;msg='';email=$('emIn')?$('emIn').value:email;renderSheet()});
 $('emIn')&&($('emIn').oninput=e=>email=e.target.value);$('pwIn')&&($('pwIn').oninput=e=>pw=e.target.value);
@@ -2475,7 +2479,7 @@ migrateCats();applyTheme();syncSet({at:updatedAt});sheet=null;save();toast('Rest
 catch(e){toast(e.message||'Restore failed')}});
 $('delAcc')&&($('delAcc').onclick=async()=>{if(!confirm('Delete your cloud account and its backup? Your ledger stays on this device. This cannot be undone.'))return;
 try{await fbDeleteAccount();toast('Account and backup deleted');renderSheet()}catch(e){toast((e.code||'').includes('requires-recent-login')?'Please sign out and back in, then try again':(e.message||'Could not delete'))}});
-$('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup from this device? Your data stays here.'))return;localStorage.removeItem(CFG_KEY);localStorage.removeItem(SYNC_KEY);localStorage.removeItem(PW_KEY);FB=null;FBuser=null;pass=null;openCloud()});
+$('resetCfg')&&($('resetCfg').onclick=()=>{if(!confirm('Remove the cloud setup from this device? Your data stays here.'))return;localStorage.removeItem(CFG_KEY);localStorage.removeItem(SYNC_KEY);localStorage.removeItem(PW_KEY);FB=null;FBuser=null;pass=null;reopen(openCloud)});
 }};renderSheet();
 if(cfg&&!FB)fbInit().then(()=>renderSheet()).catch(()=>{})}
 
@@ -2504,9 +2508,9 @@ function openAppearance(){sheet={title:'Appearance',body(){const t=D.settings.th
 <div class="muted" style="margin-bottom:16px">Used for transfers, the + button, links and charts.</div>
 <div class="field"><div>Bank logos</div><div class="seg" style="margin:0;grid-template-columns:1fr 1fr">${[['mark','Brand mark'],['icon','Website icon']].map(([v,l])=>`<button data-ls="${v}" class="${(D.settings.logoStyle||'mark')===v?'on':''}">${l}</button>`).join('')}</div></div>
 <div class="muted">Brand mark: clean white symbol on the bank's color. Website icon: the bank's own full-color app icon.</div>`},
-wire(){document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{D.settings.theme=b.dataset.th;applyTheme();save();openAppearance()});document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{D.settings.accent=b.dataset.ac;applyTheme();save();openAppearance()});document.querySelectorAll('[data-ls]').forEach(b=>b.onclick=()=>{D.settings.logoStyle=b.dataset.ls;save();openAppearance()});
-const sl=document.getElementById('slab');sl&&(sl.onchange=e=>{D.settings.slab=e.target.value;save();openAppearance()});
-const at=document.getElementById('atax');at&&(at.onchange=e=>{D.settings.afterTax=e.target.checked;save();openAppearance()})}};renderSheet()}
+wire(){document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{D.settings.theme=b.dataset.th;applyTheme();save();reopen(openAppearance)});document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{D.settings.accent=b.dataset.ac;applyTheme();save();reopen(openAppearance)});document.querySelectorAll('[data-ls]').forEach(b=>b.onclick=()=>{D.settings.logoStyle=b.dataset.ls;save();reopen(openAppearance)});
+const sl=document.getElementById('slab');sl&&(sl.onchange=e=>{D.settings.slab=e.target.value;save();reopen(openAppearance)});
+const at=document.getElementById('atax');at&&(at.onchange=e=>{D.settings.afterTax=e.target.checked;save();reopen(openAppearance)})}};renderSheet()}
 async function sha(s){if(!(window.crypto&&crypto.subtle)){toast('PIN needs the app to be opened from its https link');throw new Error('no crypto')}const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('ledger:'+s));return[...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function openPin(){const has=!!D.settings.pinHash;let step=has?'verify':'new',first='';
 sheet={title:has?'PIN lock':'Set a PIN',body(){return`<div class="muted" style="margin-bottom:10px;line-height:1.4">${has?'Enter your current PIN to change or remove it.':'A 4–6 digit code asked for when the app opens. Keeps casual eyes out; it is not bank-grade security.'}</div><input id="pinIn" class="num" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="${step==='confirm'?'Enter it again':step==='verify'?'Current PIN':'New PIN'}" style="font-size:24px;letter-spacing:8px;text-align:center"><div id="pinMsg" class="muted" style="margin:8px 0;min-height:16px"></div><button class="btn p" id="ok">${step==='verify'?'Continue':step==='confirm'?'Save PIN':'Next'}</button>${has&&step==='verify'?'<button class="btn d" id="rm">Remove PIN</button>':''}`},
