@@ -245,7 +245,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='15.8 · Oct 1 2026';
+const KEY='ledger-v1';const VERSION='15.9 · Oct 1 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -585,9 +585,14 @@ return`<div class="card" style="margin-bottom:10px"><div class="row" data-grp="$
 return`<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">${curToggle(false,true)}</div>
 <div class="muted" style="font-size:11px;letter-spacing:.04em">NET WORTH · ${CUR[c].name.toUpperCase()}S</div><div class="net num ${net<0?'out':''}">${heroAmount(net,c)}</div>
 ${(()=>{const tr=netTrend(c);return tr?`<div style="display:flex;align-items:center;gap:8px;margin-top:5px"><span class="num" style="font-size:12px;color:${tr.delta>=0?'var(--in)':'var(--out)'}">${tr.delta>=0?'▲':'▼'} ${money(Math.abs(tr.delta),0,c)}</span><span class="muted" style="font-size:12px">30 days</span><span style="margin-left:auto">${sparkline(tr.points,tr.delta>=0)}</span></div>`:''})()}
-${(()=>{const o=peopleIn(c).reduce((s2,a)=>s2+Math.max(0,owedTo(a.id)),0);const A=Math.max(0,assets),O=Math.max(0,owed);if(A+O<=0.005)return'';
+${(()=>{const pb=peopleIn(c).map(a=>owedTo(a.id));
+const o=pb.reduce((s2,v)=>s2+Math.max(0,v),0),iOwe=pb.reduce((s2,v)=>s2+Math.max(0,-v),0);
+// people sit inside `assets`, so take them out of the Assets figure and show
+// the two directions separately — otherwise the line counts them twice
+const aOwn=assets-pb.reduce((s2,v)=>s2+v,0),oTot=owed+iOwe;
+const A=Math.max(0,aOwn+o),O=Math.max(0,oTot);if(A+O<=0.005)return'';
 return`<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin:12px 0 5px"><div style="flex:${A};background:var(--in)"></div><div style="width:2px;background:var(--bg)"></div><div style="flex:${O};background:var(--out)"></div></div>
-<div class="muted num" style="display:flex;justify-content:space-between;font-size:11px;flex-wrap:wrap;gap:8px"><span>Assets ${money(assets,0,c)}</span>${o>0.005?`<span style="color:var(--accent)">${money(o,0,c)} owed to you</span>`:''}${O>0?`<span>Owed ${money(owed,0,c)}</span>`:''}</div>`})()}
+<div class="muted num" style="display:flex;justify-content:space-between;font-size:11px;flex-wrap:wrap;gap:8px"><span>Assets ${money(aOwn,0,c)}</span>${o>0.005?`<span style="color:var(--accent)">${money(o,0,c)} owed to you</span>`:''}${O>0.005?`<span>Owed ${money(oTot,0,c)}</span>`:''}</div>`})()}
 ${forecastStrip(c)}
 </div>
 <div class="sec">${mlabel(m)}<span class="r"><button class="link" data-tab-go="reports" style="font-size:12px">Reports ›</button></span></div>
@@ -598,9 +603,12 @@ ${sent>0?`<div class="brow"><div class="l"><span>Sent abroad</span><span class="
 <div class="brow" style="background:var(--bg)"><div class="l"><span><b>Remaining</b></span><span class="num"><b style="color:${remaining>=0?'var(--in)':'var(--out)'}">${money(remaining,0,c)}</b></span></div></div></div>
 ${due.length?`<div class="sec">Due<span class="r">${(()=>{const late=due.filter(d=>d.date<today()).length;return late?`<b style="color:var(--out)">${late} overdue</b>`:`${due.length} recurring`})()}</span></div><div class="card">${due.map(d=>`<div class="due"><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.r.name)}</div><div class="muted" style="font-size:12px">${dlabel(d.date)}${d.date<today()?(()=>{const n=Math.round((new Date(today()+'T00:00:00')-new Date(d.date+'T00:00:00'))/86400000);return n>=2?` · ${n} days ago`:''})():''} · ${money(d.r.amount,0,cur(acct(d.r.accountId)))} · ${esc(acct(d.r.accountId)?.name||'')}${d.r.type==='transfer'?' → '+esc(acct(d.r.toAccountId)?.name||''):''}</div></div><button class="btn" data-skip="${d.r.id}|${d.m}" style="background:transparent;color:var(--ink2)">Skip</button><button class="btn p" data-post="${d.r.id}|${d.m}">Add</button></div>`).join('')}</div>`:''}
 ${(()=>{const ppl=peopleIn(c).map(a=>({a,v:owedTo(a.id)})).filter(x=>Math.abs(x.v)>0.005);if(!ppl.length)return'';
-const tot=ppl.reduce((x,y)=>x+y.v,0);
-return`<div class="sec">Owed to you<span class="r"><button class="link" id="mgGroups" style="font-size:12px">Groups</button></span></div><div class="card">
-<div class="brow" style="background:var(--bg)"><div class="l"><span><b>${tot>=0?'Owed to you':'You owe'}</b></span><span class="num"><b style="color:${tot>=0?'var(--in)':'var(--out)'}">${money(Math.abs(tot),0,c)}</b></span></div><div class="muted" style="font-size:11px;margin-top:4px">across ${ppl.length||peopleIn(c).length} ${(ppl.length||peopleIn(c).length)===1?'person':'people'}</div></div>
+// two separate figures — netting them under one heading hid what you owe
+const owedMe=ppl.reduce((x,y)=>x+Math.max(0,y.v),0),iOwe=ppl.reduce((x,y)=>x+Math.max(0,-y.v),0);
+const nOwe=ppl.filter(x=>x.v>0).length,nMine=ppl.filter(x=>x.v<0).length;
+return`<div class="sec">People<span class="r"><button class="link" id="mgGroups" style="font-size:12px">Groups</button></span></div><div class="card">
+<div class="brow" style="background:var(--bg)">${owedMe>0.005?`<div class="l"><span><b>Owed to you</b></span><span class="num"><b style="color:var(--in)">${money(owedMe,0,c)}</b></span></div><div class="muted" style="font-size:11px;margin-top:4px">from ${nOwe} ${nOwe===1?'person':'people'}</div>`:''}
+${iOwe>0.005?`<div class="l" style="margin-top:${owedMe>0.005?'10px':'0'}"><span><b>You owe</b></span><span class="num"><b style="color:var(--out)">${money(iOwe,0,c)}</b></span></div><div class="muted" style="font-size:11px;margin-top:4px">to ${nMine} ${nMine===1?'person':'people'}</div>`:''}</div>
 ${ppl.length?ppl.map(({a,v})=>`<div class="row" data-person="${a.id}">${logoEl(a,32)}<div class="main"><div class="t">${esc(pname(a))}</div><div class="s">${v>=0?'owes you':'you owe'}</div></div><div class="amt num" style="color:${v>=0?'var(--in)':'var(--out)'}">${money(Math.abs(v),0,c)}</div></div>`).join(''):emptyState('check','Everyone is settled up','No one owes you, and you owe no one.')}</div>`})()}
 <div id="notices">${(()=>{const last=reviewDue();if(!last)return'';const c2=ensureCur();
 const sp=spentIn(last,c2),prev=spentIn(shiftMonth(last,-1),c2),kept=remainingIn(last,c2);
@@ -643,7 +651,9 @@ let F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:
 let BACK=null;let SEL=null;let UNDO=null,UT=null;let NOTICEOPEN=false;
 function goBack(){if(!BACK)return;const b=BACK;BACK=null;if(b.reopen){tab=b.tab;R.cur=b.cur;render();if(b.reopen==='wealth')openWealth();return}tab=b.tab;R.cur=b.cur;R.month=b.month||R.month;R.catOpen=b.catOpen;R.chartMode=b.chartMode;F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false};render();setTimeout(()=>window.scrollTo(0,b.y||0),0)}
 const clearFilters=()=>{F={q:'',acct:'all',type:'all',cat:null,month:null,cur:null,year:null,oneOff:false,all:false}};
-const markBack=(reopen)=>{BACK={tab,cur:R.cur,month:R.month,catOpen:R.catOpen,chartMode:R.chartMode,y:window.scrollY||0,reopen:reopen||null}};
+const markBack=(reopen)=>{BACK={tab,cur:R.cur,month:R.month,catOpen:R.catOpen,chartMode:R.chartMode,y:window.scrollY||0,reopen:reopen||null,pushed:false};
+// give the OS back gesture something to pop, so back works like a real app
+try{history.pushState({lg:1},'');BACK.pushed=true}catch(e){}};
 function refreshList(){const host=document.getElementById('alist');if(!host)return;
 const html=activity();const i=html.indexOf('<div id="alist">');
 if(i<0)return;const inner=html.slice(i+16,html.lastIndexOf('</div>'));
@@ -689,8 +699,7 @@ if(t.type==='expense')g.out[c]=(g.out[c]||0)+t.amount;if(t.type==='income')g.inn
 const tot=(o,cls,sg)=>Object.entries(o).map(([c,v])=>`<span class="${cls}">${sg}${money(v,0,c)}</span>`).join('&nbsp;&nbsp;');
 return`${SEL?`<div class="card" style="padding:10px 14px;margin-bottom:10px;background:var(--mvS)"><div class="l" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--mv)">${SEL.length} selected${(()=>{const by={};SEL.map(id=>D.txns.find(t=>t.id===id)).filter(Boolean).forEach(t=>{const cc=cur(acct(t.accountId));by[cc]=(by[cc]||0)+t.amount});const parts=Object.entries(by).map(([cc,v])=>money(v,0,cc));return parts.length?' · '+parts.join(' · '):''})()}</span><button class="link" id="selCancel" style="font-size:12px">Cancel</button></div>
 <div class="tools" style="margin-top:8px">${SEL.length?`<button class="btn" id="selCat" style="width:auto;font-size:12px;padding:7px 12px">Change category</button><button class="btn" id="selOne" style="width:auto;font-size:12px;padding:7px 12px">Mark one-off</button><button class="btn d" id="selDel" style="width:auto;font-size:12px;padding:7px 12px;margin:0">Delete</button>`:'<span class="muted" style="font-size:12px">Tap rows to select them.</span>'}</div></div>`:''}
-${BACK&&!SEL?`<button class="link" id="backBtn" style="font-size:13px;padding:0 0 6px">‹ Back to ${BACK.tab==='reports'?'reports':BACK.tab==='home'?'home':BACK.tab}</button>`:''}
-<div class="hbar"><div class="hrow"><div class="h1">Activity</div>${SEL?'':`<button class="link" id="selStart" style="font-size:13px">Select</button>`}</div></div>
+<div class="hbar">${BACK&&!SEL?`<button class="link" id="backBtn" style="font-size:13px;padding:0 0 4px;display:block;text-align:left">‹ Back to ${BACK.tab==='reports'?'reports':BACK.tab==='home'?'home':BACK.tab}</button>`:''}<div class="hrow"><div class="h1">Activity</div>${SEL?'':`<button class="link" id="selStart" style="font-size:13px">Select</button>`}</div></div>
 ${F.all?'':curToggle()}<div class="qwrap" style="margin-top:10px"><input id="q" value="${esc(F.q)}" placeholder="Search notes, categories, accounts" enterkeyhint="search" style="font-size:14px;padding:9px 12px"></input>${F.q?`<button id="qClr" type="button" aria-label="Clear">×</button><button id="qGo" type="button" aria-label="Search"><svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></svg></button>`:''}</div>
 ${(()=>{const rec=(D.recent||[]),sav=(D.saved||[]);if(!rec.length&&!sav.length)return'';
 return`<div style="margin-top:8px">${sav.length?`<div class="muted" style="font-size:11px;margin:0 0 4px">Saved</div><div class="chips" style="margin-bottom:8px">${sav.map((f,i)=>`<button type="button" data-sf="${i}" style="background:var(--mvS);border-color:var(--mvBd);color:var(--mv)">${esc(fLabel(f))}</button>`).join('')}</div>`:''}
@@ -842,7 +851,7 @@ onCancel:()=>{sheet=null;render()},
 onPick:id=>{F.acct=id;sheet=null;render();rememberSearch(document.querySelectorAll('[data-txn]').length)}})});
 v.querySelector('#ftBtn')?.addEventListener('click',()=>{openTypeFilter()});
 v.querySelectorAll('[data-fp]').forEach(b=>b.addEventListener('click',()=>{F.type=b.dataset.fp;render();window.scrollTo(0,0)}));
-v.querySelector('#backBtn')?.addEventListener('click',goBack);
+v.querySelector('#backBtn')?.addEventListener('click',()=>{if(BACK&&BACK.pushed){history.back()}else goBack()});
 v.querySelector('#rateOpen')?.addEventListener('click',openRateSheet);
 v.querySelector('#setWT')?.addEventListener('click',()=>openWealth());
 v.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>applyFilter((D.recent||[])[+b.dataset.rf]));
@@ -1351,14 +1360,20 @@ return`<div class="sec">Last 6 months<span class="r num muted" style="font-size:
 
 function insightLine(c,m,ALL){if(ALL)return'';
 try{const act=catSpend(m,c);const bud=budgetFor(m,c);
-const hist={};const ms=[];for(let i=1;i<=6;i++){const mm=shiftMonth(m,-i);ms.push(mm);const o=catSpend(mm,c);
-Object.entries(o).forEach(([k,v])=>{hist[k]=(hist[k]||0)+v})}
-Object.keys(hist).forEach(k=>hist[k]/=ms.length);
+// average over the months a category actually appeared in — dividing by six
+// regardless turns a bill you pay every other month into a false alarm
+const hist={},hn={};for(let i=1;i<=6;i++){const o=catSpend(shiftMonth(m,-i),c);
+Object.entries(o).forEach(([k,v])=>{if(v>0.005){hist[k]=(hist[k]||0)+v;hn[k]=(hn[k]||0)+1}})}
+Object.keys(hist).forEach(k=>hist[k]/=hn[k]);
 const bits=[];
+// the running month is incomplete, so only say something when it has already
+// passed its own average — "below" would just mean the month is young
+const partial=m===mk(today());
 const moved=Object.keys(act).map(k=>({k,a:act[k],h:hist[k]||0}))
- .filter(x=>x.h>0&&Math.abs(x.a-x.h)/x.h>0.25).sort((x,z)=>Math.abs(z.a-z.h)/z.h-Math.abs(x.a-x.h)/x.h)[0];
+ .filter(x=>x.h>0&&(hn[x.k]||0)>=2&&(partial?x.a-x.h>x.h*0.25:Math.abs(x.a-x.h)/x.h>0.25))
+ .sort((x,z)=>Math.abs(z.a-z.h)/z.h-Math.abs(x.a-x.h)/x.h)[0];
 if(moved){const p=Math.round(Math.abs(moved.a-moved.h)/moved.h*100);
-bits.push(`${esc(moved.k)} is running ${p}% ${moved.a>moved.h?'above':'below'} your six-month average`)}
+bits.push(`${esc(moved.k)} is ${partial?'already':'running'} ${p}% ${moved.a>moved.h?'above':'below'} its monthly average`)}
 const over=Object.keys(bud).filter(k=>+bud[k]>0&&(act[k]||0)>+bud[k]);
 if(over.length===1)bits.push(`${esc(over[0])} is the only category over its expected amount`);
 else if(over.length>1)bits.push(`${over.length} categories are over their expected amounts`);
@@ -2114,8 +2129,9 @@ if(!D.txns.some(t=>t.type==='expense'&&mk(t.date)===last))last=now;
 const ideas=[];
 ['INR','USD'].forEach(c=>{const bud=budgetFor(last,c);const act=catSpendNoOneOff(last,c);
 const hist={};const ms=[];for(let i=2;i<=window+1;i++)ms.push(shiftMonth(now,-i));
-ms.forEach(m=>{const o=catSpendNoOneOff(m,c);Object.entries(o).forEach(([k,v])=>hist[k]=(hist[k]||0)+v)});
-Object.keys(hist).forEach(k=>hist[k]/=ms.length||1);
+const hn={};
+ms.forEach(m=>{const o=catSpendNoOneOff(m,c);Object.entries(o).forEach(([k,v])=>{if(v>0.005){hist[k]=(hist[k]||0)+v;hn[k]=(hn[k]||0)+1}})});
+Object.keys(hist).forEach(k=>hist[k]/=hn[k]||1);
 [...new Set([...Object.keys(act),...Object.keys(bud)])].forEach(k=>{const fx=catFlex(k);if(fx==='fixed')return;
 const a=act[k]||0,e=+(bud[k]||0),h=hist[k]||0;
 const overBudget=e>0?a-e:0;const overAvg=h>0?a-h:0;
@@ -2505,7 +2521,21 @@ $('rm')&&($('rm').onclick=async()=>{if(await sha(inp.value)!==D.settings.pinHash
 function showLock(){const el=document.getElementById('lock');let buf='';el.hidden=false;
 const draw=()=>{morph(el,`<div style="font-size:22px;font-weight:700;letter-spacing:-.5px">Ledger</div><div class="muted">Enter your PIN</div><div class="dots">${Array.from({length:Math.max(4,buf.length)},(_,i)=>`<i class="${i<buf.length?'f':''}"></i>`).join('')}</div><div class="pad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-n="${n}">${n}</button>`).join('')}<button class="ghost" data-n="del">Delete</button><button data-n="0">0</button><button class="ghost" data-n="ok">OK</button></div><div id="lockMsg" class="muted" style="min-height:16px"></div>`);
 el.querySelectorAll('[data-n]').forEach(b=>b.onclick=async()=>{const n=b.dataset.n;if(n==='del')buf=buf.slice(0,-1);else if(n==='ok'){if(await sha(buf)===D.settings.pinHash){el.hidden=true;sessionStorage.setItem('unlocked','1');return}buf='';draw();document.getElementById('lockMsg').textContent='Wrong PIN';return}else if(buf.length<6)buf+=n;draw();if(buf.length>=4&&await sha(buf)===D.settings.pinHash){el.hidden=true;sessionStorage.setItem('unlocked','1')}})};draw()}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)sessionStorage.setItem('hiddenAt',Date.now());else if(D.settings.pinHash&&Date.now()-(+sessionStorage.getItem('hiddenAt')||0)>5*60*1000&&document.getElementById('lock').hidden)showLock()});
+// as a home-screen app this page is never reloaded, so anything fixed at
+// startup — the month, today's date, overdue markers, the daily rates — stays
+// frozen until the app is woken up deliberately
+let DAYSEEN=today();
+function dayRoll(){const d=today();if(d===DAYSEEN)return;
+const was=mk(DAYSEEN);DAYSEEN=d;const now=mk(d);
+if(R.month===was)R.month=now;
+if(F.month===was)F.month=now;
+R.year=+d.slice(0,4);
+try{render()}catch(e){}
+try{autoRates()}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)sessionStorage.setItem('hiddenAt',Date.now());else{if(D.settings.pinHash&&Date.now()-(+sessionStorage.getItem('hiddenAt')||0)>5*60*1000&&document.getElementById('lock').hidden)showLock();dayRoll()}});
+window.addEventListener('pageshow',dayRoll);
+window.addEventListener('focus',dayRoll);
+window.addEventListener('popstate',()=>{if(sheet){closeSheet();return}if(BACK)goBack()});
 
 // ---------- backup ----------
 function openBackup(){sheet={title:'Backup & move',body(){return`<div class="muted" style="line-height:1.45;margin-bottom:12px">Copies everything — accounts, transactions, goals, categories, settings — as one block of text. Paste it into a new version or another device to restore.</div><div class="tools" style="margin:0"><button class="btn" id="bkCopy">Copy everything</button><button class="btn" id="bkPaste">Paste &amp; restore</button><button class="btn" id="bkFile">Save as file</button></div>`},
