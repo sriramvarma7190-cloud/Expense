@@ -249,7 +249,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='16.6 · Oct 1 2026';
+const KEY='ledger-v1';const VERSION='16.7 · Oct 1 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){clearTimeout(saveT);saveT=null;localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1247,8 +1247,8 @@ ${st.type==='transfer'?`<div class="g2"><label class="field"><div>Sent on</div><
 :`<label class="field"><div>Date</div><input id="dt" type="date" value="${st.date}"></label><label class="field"><div>Note</div><input id="nt" value="${esc(st.note)}" placeholder="Where, what, who"></label>`}
 ${(st.type==='expense'||st.type==='income')?'</div>':''}
 ${(()=>{if(st.type!=='expense'&&st.type!=='income')return'';if(edit)return'';
-const cand=plainDue(st.type,st.accountId);if(!cand.length)return'';
-return`<div class="field" style="margin-bottom:12px">${cand.slice(0,3).map(d=>`<label style="display:flex;align-items:flex-start;gap:8px;padding:4px 0"><input type="checkbox" data-claim="${esc(d.r.id)}|${esc(d.m)}"${st.claim===d.r.id+'|'+d.m?' checked':''}><span style="font-size:14px;line-height:1.4">This is my ${esc(d.r.name)}<br><span class="muted" style="font-size:11px">due ${dlabel(d.date)} · ${money(d.r.amount,0,curOfForm())} — ticking it clears the reminder</span></span></label>`).join('')}</div>`})()}
+const cand=openThisMonth(st.type,st.accountId);if(!cand.length)return'';
+return`<div class="field" style="margin-bottom:12px">${cand.slice(0,3).map(d=>`<label style="display:flex;align-items:flex-start;gap:8px;padding:4px 0"><input type="checkbox" data-claim="${esc(d.r.id)}|${esc(d.m)}"${st.claim===d.r.id+'|'+d.m?' checked':''}><span style="font-size:14px;line-height:1.4">This is my ${esc(d.r.name)}<br><span class="muted" style="font-size:11px">due ${dlabel(d.date)} · ${money(d.r.amount,0,curOfForm())} — ${d.date>today()?'ticking it means the reminder never appears':'ticking it clears the reminder'}</span></span></label>`).join('')}</div>`})()}
 <button class="btn p" id="ok"${valid()?'':' disabled'}>${edit?'Save changes':st.type==='transfer'?'Record transfer':st.type==='income'?'Add income':'Add expense'}</button>${edit?'<button class="btn d" id="del">Delete transaction</button>':''}`},
 wire(){const $=id=>document.getElementById(id);const re=()=>{$('ok').disabled=!valid()};
 
@@ -1684,6 +1684,16 @@ const dueDate=(r,m)=>{const[y,mo]=m.split('-').map(Number);const last=new Date(y
 // A plain recurring expense has no account of its own to watch, unlike a loan
 // or a card, so the app can only ever suggest a match — never decide one.
 const plainDue=(type,accountId)=>{try{return dueRecurring().filter(d=>d.r&&!String(d.r.id).includes(':')&&d.r.type===type&&d.r.accountId===accountId)}catch(e){return[]}};
+// Paying early is the common case — the bill is due on the 10th and you settle
+// it on the 1st. The reminder has not appeared yet, so the entry form has to
+// look at the whole of this month, not only at what is already overdue.
+const openThisMonth=(type,accountId)=>{try{const now=mk(today());const out=[];
+(D.recurring||[]).forEach(r=>{if(r.active===false||r.type!==type||r.accountId!==accountId)return;
+if(r.every==='week'||r.every==='2week'){const d=plainDue(type,accountId).filter(x=>x.r.id===r.id);d.forEach(x=>out.push(x));return}
+if((r.posted||[]).includes(now))return;
+if(r.start&&r.start>now)return;
+out.push({r,m:now,date:dueDate(r,now)})});
+return out}catch(e){return[]}};
 const matchFor=d=>{const r=d&&d.r;if(!r||String(r.id).includes(':'))return null;
 if((r.ignore||[]).includes(d.m))return null;
 const m=String(d.m).slice(0,7);
