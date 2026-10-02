@@ -249,7 +249,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='16.4 · Oct 1 2026';
+const KEY='ledger-v1';const VERSION='16.5 · Oct 1 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){clearTimeout(saveT);saveT=null;localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1556,7 +1556,18 @@ Object.entries(renames).forEach(([from,to])=>{D.txns.forEach(t=>{if(t.type===rt&
 // with it, and its transactions are never stranded without being offered a home
 const gone=orig.filter(o=>!kept.includes(o));
 gone.forEach(k=>Object.values((D.budgets||{})[c]||{}).forEach(b=>{if(b[k]!=null)delete b[k]}));
-D.cats=D.cats||{};D.cats[c]=D.cats[c]||{};D.cats[c][kind]=clean;localStorage.setItem(KEY,JSON.stringify(D));
+D.cats=D.cats||{};D.cats[c]=D.cats[c]||{};D.cats[c][kind]=clean;
+// the flexibility and one-off marks are keyed by name, so they must follow a
+// rename and leave with a removal — but only when no other list still uses
+// that name, since the marks are shared across currencies
+const stillUsed=n=>['USD','INR'].some(cc=>catsOf('expense',cc).includes(n)||catsOf('income',cc).includes(n));
+D.settings.flex=D.settings.flex||{};D.settings.oneOffCats=D.settings.oneOffCats||[];
+Object.entries(renames).forEach(([from,to])=>{
+if(D.settings.flex[from]!=null){D.settings.flex[to]=D.settings.flex[from];if(!stillUsed(from))delete D.settings.flex[from]}
+if(D.settings.oneOffCats.includes(from)){if(!D.settings.oneOffCats.includes(to))D.settings.oneOffCats.push(to);
+if(!stillUsed(from))D.settings.oneOffCats=D.settings.oneOffCats.filter(x=>x!==from)}});
+gone.forEach(k=>{if(stillUsed(k))return;delete D.settings.flex[k];D.settings.oneOffCats=D.settings.oneOffCats.filter(x=>x!==k)});
+localStorage.setItem(KEY,JSON.stringify(D));
 const stranded=gone.map(k=>({k,n:D.txns.filter(t=>t.type===rt&&t.category===k&&cur(acct(t.accountId))===c).length})).filter(x=>x.n>0);
 if(stranded.length){openCatMove(stranded,clean,rt,c,()=>{toast('Categories saved');finish();render()});return}
 toast('Categories saved');finish();render()};
