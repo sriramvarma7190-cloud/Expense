@@ -249,7 +249,7 @@ p.help{font-size:12px;color:var(--ink3);margin-top:28px;line-height:1.5}
 
 <script>
 // ---------- state ----------
-const KEY='ledger-v1';const VERSION='16.3 · Oct 1 2026';
+const KEY='ledger-v1';const VERSION='16.4 · Oct 1 2026';
 let D=load(); let tab='home'; let sheet=null;
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):{accounts:[],txns:[]}}catch{return{accounts:[],txns:[]}}}
 function save(){clearTimeout(saveT);saveT=null;localStorage.setItem(KEY,JSON.stringify(D));render();try{cloudQueue()}catch(e){}}
@@ -1484,16 +1484,43 @@ const st={scope:hasScoped?'month':'default',vals:{...(hasScoped?D.budgets[c][m]:
 sheet={title:'Expected spending',body(){return`<div class="seg" style="grid-template-columns:1fr 1fr"><button data-s="default" class="${st.scope==='default'?'on':''}">Every month</button><button data-s="month" class="${st.scope==='month'?'on':''}">Only ${mlabel(m).split(' ')[0]}</button></div>
 <div class="muted" style="margin-bottom:12px;line-height:1.4">${st.scope==='default'?'Your normal monthly plan. Used for any month without its own amounts.':`Amounts for ${mlabel(m)} only — for a month you know will be different.`} Leave a category blank to skip it.</div>
 <div class="bgrid">${catsOf('expense',c).map(k=>`<span>${esc(k)}</span><input class="b num" data-k="${esc(k)}" inputmode="decimal" placeholder="${CUR[c].sym}" value="${st.vals[k]>0?st.vals[k]:''}">`).join('')}</div>
+${(()=>{const known=new Set(catsOf('expense',c));
+// amounts left behind by a category that no longer exists — they still count
+// towards the total, so they must be reachable
+const strays=Object.keys(st.vals).filter(k=>!known.has(k)&&+st.vals[k]>0);
+if(!strays.length)return'';
+return`<div class="note out" style="margin:14px 0 6px">${strays.length===1?'One amount belongs':strays.length+' amounts belong'} to a category that is no longer in your list, and ${strays.length===1?'it is':'they are'} still counted below. Clear ${strays.length===1?'it':'them'} here.</div>
+<div class="bgrid">${strays.map(k=>`<span class="muted">${esc(k)}</span><input class="b num" data-k="${esc(k)}" inputmode="decimal" placeholder="${CUR[c].sym}" value="${st.vals[k]}">`).join('')}</div>
+<button class="btn" id="clrStray" style="margin-top:8px">Clear ${strays.length===1?'it':'them all'}</button>`})()}
 <div class="muted num" style="margin:12px 0"><b id="btot"></b> expected per month</div>
 <button class="btn p" id="ok">Save expected amounts</button>${(st.scope==='month'&&hasScoped)||(st.scope==='default'&&D.budgets[c].default)?`<button class="btn d" id="del">Clear ${st.scope==='month'?'this month\'s':'monthly'} amounts</button>`:''}`},
 wire(){const $=id=>document.getElementById(id);const tot=()=>{$('btot').textContent=money(Object.values(st.vals).reduce((s,v)=>s+(+v||0),0),0,c)};tot();
 document.querySelectorAll('.seg button[data-s]').forEach(b=>b.onclick=()=>{st.scope=b.dataset.s;st.vals={...(st.scope==='month'?(D.budgets[c][m]||D.budgets[c].default||{}):(D.budgets[c].default||{}))};renderSheet()});
 document.querySelectorAll('[data-k]').forEach(i=>i.oninput=e=>{const v=e.target.value.replace(/[^0-9.]/g,'');e.target.value=v;const n=parseFloat(v);if(n>0)st.vals[i.dataset.k]=n;else delete st.vals[i.dataset.k];tot()});
+$('clrStray')&&($('clrStray').onclick=()=>{const known=new Set(catsOf('expense',c));
+Object.keys(st.vals).forEach(k=>{if(!known.has(k))delete st.vals[k]});renderSheet();toast('Cleared')});
 $('ok').onclick=()=>{D.budgets[c][st.scope==='month'?m:'default']=st.vals;sheet=null;save();toast('Expected amounts saved')};
 $('del')&&($('del').onclick=()=>{delete D.budgets[c][st.scope==='month'?m:'default'];sheet=null;save();toast('Cleared')})}};renderSheet()}
 
 // ---------- categories ----------
-function openCats(kind,onDone,c){c=c||R.cur||'USD';const prev=sheet;const list=[...catsOf(kind,c)];const renames={};let newName='';
+// A removed category must not quietly strand the transactions that used it.
+function openCatMove(items,targets,rt,c,after){
+const pick={};items.forEach(x=>pick[x.k]='');
+sheet={title:'Before removing',body(){return`<div class="muted" style="line-height:1.45;margin-bottom:14px">${items.length===1?'This category has transactions using it.':'These categories have transactions using them.'} Choose where they should go, or leave them as they are.</div>
+${items.map(x=>`<label class="field"><div>${esc(x.k)} <span class="muted">· ${x.n} transaction${x.n===1?'':'s'}</span></div>
+<select data-mv="${esc(x.k)}"><option value="">Leave them as they are</option>${targets.map(t=>`<option value="${esc(t)}"${pick[x.k]===t?' selected':''}>Move to ${esc(t)}</option>`).join('')}</select></label>`).join('')}
+<button class="btn p" id="ok">Done</button>`},
+wire(){document.querySelectorAll('[data-mv]').forEach(se=>se.onchange=e=>{pick[se.dataset.mv]=e.target.value});
+document.getElementById('ok').onclick=()=>{let moved=0;
+Object.entries(pick).forEach(([from,to])=>{if(!to)return;
+D.txns.forEach(t=>{if(t.type===rt&&t.category===from&&cur(acct(t.accountId))===c){t.category=to;moved++}})});
+localStorage.setItem(KEY,JSON.stringify(D));if(moved)toast(moved+' transaction'+(moved===1?'':'s')+' moved');
+if(after)after()}}};renderSheet()}
+
+function openCats(kind,onDone,c){c=c||R.cur||'USD';const prev=sheet;const list=[...catsOf(kind,c)];
+// each row carries the name it started as, so a rename is this row's text
+// changing — not whatever happens to sit at the same position afterwards
+const oname=[...list];let newName='';
 const finish=()=>{sheet=prev;if(onDone)onDone();else renderSheet()};
 sheet={title:(kind==='income'?'Income categories':'Expense categories')+' · '+c,body(){return`${!onDone?`<div class="seg" style="grid-template-columns:1fr 1fr 1fr 1fr">${['USD','INR'].map(k=>`<button data-cc="${k}" class="${c===k?'on':''}">${k}</button>`).join('')}${['expense','income'].map(k=>`<button data-ck="${k}" class="${kind===k?'on':''}">${k==='income'?'Income':'Expense'}</button>`).join('')}</div>`:''}<div class="muted" style="margin-bottom:10px;line-height:1.4">Rename by typing, reorder with the arrows, remove with ×. Past transactions follow a rename; removed categories stay on old transactions.</div>
 ${list.map((k,i)=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input class="b" data-i="${i}" value="${esc(k)}" style="flex:1"><button class="link" data-up="${i}" style="color:var(--ink2);font-size:18px;width:28px"${i===0?' disabled':''}>↑</button><button class="link" data-dn="${i}" style="color:var(--ink2);font-size:18px;width:28px"${i===list.length-1?' disabled':''}>↓</button><button class="link" data-rm="${i}" style="color:var(--out);font-size:20px;width:28px">×</button></div>`).join('')}
@@ -1510,19 +1537,29 @@ document.querySelectorAll('[data-cc]').forEach(b=>b.onclick=()=>sw(kind,b.datase
 document.querySelectorAll('[data-i]').forEach(inp=>inp.oninput=e=>{list[+inp.dataset.i]=e.target.value});
 const sync=()=>{list.forEach((_,i)=>{const el=document.querySelector(`[data-i="${i}"]`);if(el)list[i]=el.value});const n=document.getElementById('newCat');if(n)newName=n.value};
 const rerender=()=>{sync();renderSheet()};
-document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{sync();const i=+b.dataset.up;if(i<1)return;[list[i-1],list[i]]=[list[i],list[i-1]];renderSheet()});
-document.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{sync();const i=+b.dataset.dn;if(i>=list.length-1)return;[list[i+1],list[i]]=[list[i],list[i+1]];renderSheet()});
-document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();list.splice(+b.dataset.rm,1);renderSheet()});
-const add=()=>{sync();const v=$('newCat').value.trim();if(!v)return;if(list.some(x=>x.trim().toLowerCase()===v.toLowerCase())){toast('Already in the list');return}list.push(v);newName='';renderSheet();setTimeout(()=>document.getElementById('newCat')?.focus(),0)};
+document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{sync();const i=+b.dataset.up;if(i<1)return;[list[i-1],list[i]]=[list[i],list[i-1]];[oname[i-1],oname[i]]=[oname[i],oname[i-1]];renderSheet()});
+document.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{sync();const i=+b.dataset.dn;if(i>=list.length-1)return;[list[i+1],list[i]]=[list[i],list[i+1]];[oname[i+1],oname[i]]=[oname[i],oname[i+1]];renderSheet()});
+document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();const i=+b.dataset.rm;list.splice(i,1);oname.splice(i,1);renderSheet()});
+const add=()=>{sync();const v=$('newCat').value.trim();if(!v)return;if(list.some(x=>x.trim().toLowerCase()===v.toLowerCase())){toast('Already in the list');return}list.push(v);oname.push(null);newName='';renderSheet();setTimeout(()=>document.getElementById('newCat')?.focus(),0)};
 $('addCat').onclick=add;$('newCat').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();add()}};
-$('ok').onclick=()=>{const orig=catsOf(kind,c);const clean=list.map(x=>x.trim()).filter(Boolean);
+$('ok').onclick=()=>{const orig=catsOf(kind,c);
+const clean=[],kept=[];
+list.forEach((x,i)=>{const t=(x||'').trim();if(t){clean.push(t);kept.push(oname[i]==null?null:oname[i])}});
 const seen=new Set();for(const x of clean){if(seen.has(x.toLowerCase())){toast('Duplicate: '+x);return}seen.add(x.toLowerCase())}
 if(!clean.length){toast('Keep at least one category');return}
-// renames: same position, different text
-orig.forEach((o,i)=>{if(list[i]!=null&&list[i].trim()&&list[i].trim()!==o&&!orig.includes(list[i].trim()))renames[o]=list[i].trim()});
 const rt=kind==='income'?'income':'expense';
+// a rename is a surviving row whose own original name changed
+const renames={};
+clean.forEach((t,i)=>{const o=kept[i];if(o&&o!==t&&!clean.includes(o))renames[o]=t});
 Object.entries(renames).forEach(([from,to])=>{D.txns.forEach(t=>{if(t.type===rt&&t.category===from&&cur(acct(t.accountId))===c)t.category=to});Object.values((D.budgets||{})[c]||{}).forEach(b=>{if(b[from]!=null){b[to]=(b[to]||0)+b[from];delete b[from]}})});
-D.cats=D.cats||{};D.cats[c]=D.cats[c]||{};D.cats[c][kind]=clean;localStorage.setItem(KEY,JSON.stringify(D));toast('Categories saved');finish();render()};
+// a removal is an original with no surviving row — its expected amount goes
+// with it, and its transactions are never stranded without being offered a home
+const gone=orig.filter(o=>!kept.includes(o));
+gone.forEach(k=>Object.values((D.budgets||{})[c]||{}).forEach(b=>{if(b[k]!=null)delete b[k]}));
+D.cats=D.cats||{};D.cats[c]=D.cats[c]||{};D.cats[c][kind]=clean;localStorage.setItem(KEY,JSON.stringify(D));
+const stranded=gone.map(k=>({k,n:D.txns.filter(t=>t.type===rt&&t.category===k&&cur(acct(t.accountId))===c).length})).filter(x=>x.n>0);
+if(stranded.length){openCatMove(stranded,clean,rt,c,()=>{toast('Categories saved');finish();render()});return}
+toast('Categories saved');finish();render()};
 document.querySelectorAll('[data-fx]').forEach(b=>b.onclick=()=>{const[k,v]=b.dataset.fx.split('|');D.settings.flex=D.settings.flex||{};D.settings.flex[k]=v;localStorage.setItem(KEY,JSON.stringify(D));renderSheet()});
 document.querySelectorAll('[data-oo]').forEach(b=>b.onclick=()=>{const k=b.dataset.oo;D.settings.oneOffCats=D.settings.oneOffCats||[];const i=D.settings.oneOffCats.indexOf(k);if(i>=0)D.settings.oneOffCats.splice(i,1);else D.settings.oneOffCats.push(k);localStorage.setItem(KEY,JSON.stringify(D));renderSheet()});
 $('resetCats').onclick=()=>{if(!confirm('Go back to the original list?'))return;D.cats=D.cats||{};if(D.cats[c])delete D.cats[c][kind];localStorage.setItem(KEY,JSON.stringify(D));finish();render()};
